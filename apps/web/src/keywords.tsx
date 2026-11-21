@@ -231,7 +231,7 @@ export function Keywords() {
             type="search"
             value={seed}
             onChange={event => setSeed(event.target.value)}
-            placeholder="e.g. medicaid for parents"
+            placeholder="e.g. beginner photography"
             required
             maxLength={200}
           />
