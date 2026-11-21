@@ -1,3 +1,4 @@
+import { SaveToBoard } from './save-to-board';
 import { useState } from 'react';
 import type { Video } from '@tubescope/shared';
 import { Table } from './research';
@@ -80,6 +81,7 @@ export function VideoTable({ rows }: { rows: ResultVideo[] }) {
                   {video.thumbnail ? <img src={video.thumbnail} alt="" width="96" height="54" loading="lazy" /> : null}
                   <span>{video.title}</span>
                 </a>
+                <SaveToBoard video={video} />
               </td>
               <td>{video.channel_title}</td>
               <td>{format(video.view_count)}</td>

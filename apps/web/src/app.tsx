@@ -1,3 +1,9 @@
+import { Calculators } from './calculators';
+import { Portfolio } from './portfolio';
+import { Boards } from './boards';
+import { Comments } from './comments';
+import { Packaging } from './packaging';
+import { Analytics } from './analytics';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, Route, Routes } from 'react-router';
 import type { QuotaResponse } from '@tubescope/shared';
@@ -24,6 +30,10 @@ const navigation = [
       { to: '/', label: 'Dashboard', glyph: '◫' },
       { to: '/channels', label: 'Channels', glyph: '◉' },
       { to: '/library', label: 'Video library', glyph: '▤' },
+      { to: '/analytics', label: 'Analytics', glyph: '▥' },
+      { to: '/packaging', label: 'Packaging', glyph: '▧' },
+      { to: '/comments', label: 'Comments', glyph: '☷' },
+      { to: '/portfolio', label: 'All channels', glyph: '◉' },
     ],
   },
   {
@@ -33,6 +43,8 @@ const navigation = [
       { to: '/outliers', label: 'Outliers', glyph: '↗' },
       { to: '/index', label: 'Outlier index', glyph: '▦' },
       { to: '/trending', label: 'Trending & niches', glyph: '⌁' },
+      { to: '/boards', label: 'Boards & blueprints', glyph: '▦' },
+      { to: '/calculators', label: 'Calculators', glyph: '≡' },
     ],
   },
   {
@@ -127,6 +139,12 @@ export function App() {
         <main id="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/analytics" element={<Analytics />} />
+            <Route path="/packaging" element={<Packaging />} />
+            <Route path="/comments" element={<Comments />} />
+            <Route path="/boards" element={<Boards />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/calculators" element={<Calculators />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
