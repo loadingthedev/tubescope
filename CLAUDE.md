@@ -9,6 +9,7 @@ Private MIT fork, taken at upstream commit 3503111. See README.md for upstream c
 - Don't pull or merge from `upstream`. Upstream is a single, new author: copy an idea by hand only after reading the code.
 - New features take inspiration from vidIQ (what it shows and how), built on free sources: YouTube Data API, YouTube Analytics API (read-only scopes), autocomplete, Google Trends.
 - Estimates must be labelled as estimates. Never present a made-up number as data (no fake search volume).
+- No AI inside the app. AI work (ideas, titles, descriptions, thumbnail feedback, coaching) happens in Claude sessions using Tubescope's data. Keep `ai_provider` at `none`; don't add AI providers. Inherited AI features get deleted with the classic UI.
 - Quota: searches have their own 100/day limit; everything else shares 10,000 units/day.
 
 ## Conventions
