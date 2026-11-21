@@ -4,6 +4,7 @@ import type { QuotaResponse } from '@tubescope/shared';
 import { getJson } from './api';
 import { Keywords } from './Keywords';
 import { Outliers } from './Outliers';
+import { Competitors } from './Competitors';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
@@ -85,7 +86,7 @@ export function App() {
             <Route path="/" element={<ComingSoon name="Dashboard" />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
-            <Route path="/competitors" element={<ComingSoon name="Competitors" hash="#/competitors" />} />
+            <Route path="/competitors" element={<Competitors />} />
             <Route path="*" element={<ComingSoon name="Page not found" />} />
           </Routes>
         </main>
