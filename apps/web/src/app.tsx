@@ -1,3 +1,4 @@
+import { Analytics } from './analytics';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, Route, Routes } from 'react-router';
 import type { QuotaResponse } from '@tubescope/shared';
@@ -24,6 +25,7 @@ const navigation = [
       { to: '/', label: 'Dashboard', glyph: '◫' },
       { to: '/channels', label: 'Channels', glyph: '◉' },
       { to: '/library', label: 'Video library', glyph: '▤' },
+      { to: '/analytics', label: 'Analytics', glyph: '▥' },
     ],
   },
   {
@@ -127,6 +129,7 @@ export function App() {
         <main id="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/analytics" element={<Analytics />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
