@@ -1,4 +1,4 @@
-import { SearchX } from 'lucide-react';
+import { SearchX, Send } from 'lucide-react';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { OutlierMark } from './components/outlier-mark';
@@ -20,11 +20,13 @@ export function Portfolio() {
       <PageHeader
         title="All channels"
         description="Owned-channel summaries. Weekly comparisons use stored snapshots; missing history is shown as unavailable."
+        actions={
+          <Button type="button" title="Sends through the notifications set up in Settings" disabled={summary.isPending} onClick={() => summary.mutate()}>
+            {summary.isPending ? <Spinner data-icon="inline-start" /> : <Send data-icon="inline-start" />}
+            {summary.isPending ? 'Sending…' : 'Send weekly summary'}
+          </Button>
+        }
       />
-      <Button type="button" disabled={summary.isPending} onClick={() => summary.mutate()}>
-        {summary.isPending ? <Spinner data-icon="inline-start" /> : null}
-        {summary.isPending ? 'Sending…' : 'Send weekly summary via configured notifications'}
-      </Button>
       {summary.isError ? (
         <Alert variant="destructive">
           <AlertDescription>{summary.error.message}</AlertDescription>
