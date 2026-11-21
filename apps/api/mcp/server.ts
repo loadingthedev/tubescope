@@ -3,7 +3,7 @@ import { env } from '../src/lib/env.ts';
 // Tubescope MCP server (stdio, no dependencies). Lets any local MCP client — Claude Code, Claude Desktop, Cursor, Codex,
 // Gemini CLI, etc. — use Tubescope by calling the local Tubescope server. Remote clients (ChatGPT, claude.ai, phones) use
 // Tubescope's own HTTPS endpoint instead: Settings → Use Tubescope from any AI.
-//   claude mcp add tubescope -- bun /path/to/tubescope/mcp/server.ts
+//   claude mcp add tubescope -- bun /path/to/tubescope/apps/api/mcp/server.ts
 //   TUBESCOPE_URL=http://localhost:4949 (default)
 import readline from 'node:readline';
 import { createToolRunner, handleMcpMessage } from './tools.ts';

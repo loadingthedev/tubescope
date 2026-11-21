@@ -1,3 +1,4 @@
+import type { KeywordExploreResponse, KeywordCompetitionResponse } from '@tubescope/shared';
 // Keyword research, outliers, trending, niche exploration — built on search.list, suggest, and local data.
 import { db, today, getSetting } from '../db.ts';
 import { ytGet, suggest, DEFAULT_TTL } from '../youtube/client.ts';
@@ -8,7 +9,7 @@ const QUESTION_PREFIXES = ['how', 'what', 'why', 'when', 'where', 'which', 'can'
 const MODIFIERS = ['for beginners', 'tutorial', 'explained', 'vs', 'review', 'tips', 'mistakes', 'best', '2026', 'step by step', 'in 10 minutes', 'cheap', 'free', 'without'];
 
 /** Keyword explorer: autocomplete tree (free) → long-tail + question variants. */
-export async function keywordExplore(seed: string, { country = 'US', lang = 'en', deep = true }: { country?: string; lang?: string; deep?: boolean } = {}) {
+export async function keywordExplore(seed: string, { country = 'US', lang = 'en', deep = true }: { country?: string; lang?: string; deep?: boolean } = {}): Promise<KeywordExploreResponse> {
   const base = await suggest(seed, { country, lang });
   const letters = deep ? 'abcdefghijklmnopqrstuvwxyz'.split('') : [];
   const tasks = [];
@@ -28,7 +29,7 @@ export async function keywordExplore(seed: string, { country = 'US', lang = 'en'
 }
 
 /** Competition evidence for a keyword using a real search.list sample. ~102 quota units, cached 24h. */
-export async function keywordCompetition(keyword: string, { country = 'US', lang = 'en', sample = 25 }: { country?: string; lang?: string; sample?: number } = {}) {
+export async function keywordCompetition(keyword: string, { country = 'US', lang = 'en', sample = 25 }: { country?: string; lang?: string; sample?: number } = {}): Promise<KeywordCompetitionResponse> {
   const sr = await ytGet('search.list', { part: 'snippet', q: keyword, type: 'video', regionCode: country, relevanceLanguage: lang, maxResults: sample }, { ttl: DEFAULT_TTL.search });
   const ids = (sr.items || []).map(i => i.id.videoId).filter(Boolean);
   const videos = await fetchVideosByIds(ids);

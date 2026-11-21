@@ -1,6 +1,10 @@
-node_modules
+**/node_modules
 .git
-data
-test
+**/data
+**/dist
+apps/api/test
 extension
 docs
+.env
+**/.env
+*.log

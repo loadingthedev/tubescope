@@ -1,3 +1,4 @@
+import type { CompetitorComparisonResponse } from '@tubescope/shared';
 import { onAlert } from './notify.ts';
 import { db } from '../db.ts';
 import { addChannel, getChannel, publicChannel, syncVideos, channelHistory, hydrateVideo, refreshChannel } from './channels.ts';
@@ -46,7 +47,7 @@ function channelMetrics(id, days = 30) {
   };
 }
 
-export function compare(ownedId: string, days = 30) {
+export function compare(ownedId: string, days = 30): CompetitorComparisonResponse {
   const ids = [ownedId, ...db.prepare('SELECT competitor_channel_id AS id FROM competitor_links WHERE owned_channel_id = ?').all(ownedId).map(r => r.id)];
   return { days, channels: ids.map(id => channelMetrics(id, days)), note: 'Growth columns need daily snapshots (scheduler); medians come from synced libraries, so sync depth matters.' };
 }

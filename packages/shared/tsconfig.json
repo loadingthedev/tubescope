@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "types": [],
+    "lib": [
+      "ESNext"
+    ],
+    "noImplicitAny": true
+  },
+  "include": [
+    "src"
+  ]
+}

@@ -1,3 +1,4 @@
+import type { SettingsResponse } from '@tubescope/shared';
 import { env } from './lib/env.ts';
 import { Database, type Statement, type SQLQueryBindings } from 'bun:sqlite';
 
@@ -266,7 +267,7 @@ export function setSetting(key: string, value: unknown) {
   db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
     .run(key, String(value ?? ''));
 }
-export function allSettings() {
+export function allSettings(): SettingsResponse {
   const out: Record<string, string> = {};
   for (const r of db.prepare<SettingRow>('SELECT key, value FROM settings').all()) out[r.key] = r.value;
   return out;

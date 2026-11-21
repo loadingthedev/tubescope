@@ -64,6 +64,11 @@ app.use('/data/thumbs', express.static(path.join(DATA_DIR, 'thumbs')));
 app.use('/data/voiceovers', express.static(path.join(DATA_DIR, 'voiceovers')));
 app.use('/data/renders', express.static(path.join(DATA_DIR, 'renders')));
 app.use('/data/made', express.static(path.join(DATA_DIR, 'made')));
+// React preview lives alongside the unchanged classic UI. Keep the existing access guards.
+const webDist = path.resolve(__dirname, '../../web/dist');
+app.use('/app/assets', express.static(path.join(webDist, 'assets'), { fallthrough: false }));
+app.use('/app', express.static(webDist, { index: false, redirect: false }));
+app.get(['/app', '/app/*'], (req, res) => res.sendFile(path.join(webDist, 'index.html')));
 app.use(express.static(path.join(__dirname, '..', 'public'), { extensions: ['html'] }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 

@@ -1,5 +1,5 @@
 {
-  "name": "tubescope",
+  "name": "@tubescope/api",
   "version": "2.1.0",
   "description": "Self-hosted YouTube channel intelligence desk: analytics, keyword research, outliers, competitors, packaging, a calibrated virality radar, AI coaching and comment tools for channels you own.",
   "type": "module",
@@ -10,13 +10,14 @@
   "scripts": {
     "start": "bun src/server.ts",
     "dev": "bun --watch src/server.ts",
-    "test": "bun test --isolate --timeout 180000",
+    "test": "bun test --isolate --timeout 180000 < /dev/null",
     "snapshot": "bun src/jobs/run-snapshot.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "@tubescope/shared": "workspace:*"
   },
   "packageManager": "bun@1.4.0",
   "devDependencies": {

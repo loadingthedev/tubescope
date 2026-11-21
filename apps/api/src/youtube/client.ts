@@ -1,3 +1,4 @@
+import type { QuotaToday } from '@tubescope/shared';
 // YouTube Data API v3 client with transparent caching and a quota ledger.
 // Every call is logged to api_log so the Settings page can show real quota use.
 import crypto from 'node:crypto';
@@ -97,7 +98,7 @@ export function logApi({ api, endpoint, units, cached, ms, ok = 1 }: { api?: str
     .run(quotaDay(), api, endpoint, units, cached ? 1 : 0, ms || 0, ok ? 1 : 0);
 }
 
-export function quotaToday() {
+export function quotaToday(): QuotaToday {
   const day = quotaDay();
   const row = db.prepare("SELECT COALESCE(SUM(units),0) AS units, COUNT(*) AS calls, SUM(cached) AS cached FROM api_log WHERE day = ? AND api = 'data'").get(day);
   const limit = Number(getSetting('yt_quota_limit', 10000));

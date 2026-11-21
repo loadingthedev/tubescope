@@ -1,3 +1,4 @@
+import type { KeywordDemandResponse } from '@tubescope/shared';
 // Headline scores. Every score exposes its components; none claims to predict CTR or views.
 import { db } from '../db.ts';
 import { suggest } from '../youtube/client.ts';
@@ -17,7 +18,7 @@ const QUESTIONS = ['how', 'what', 'why', 'is', 'can', 'does', 'should', 'when'];
  *  velocity   — (optional, when a search sample is supplied) log views/day of the top results
  * Labelled an index, not a search volume: YouTube publishes no volume figure; any tool showing one is estimating.
  */
-export async function demandIndex(seed: string, { country = 'US', sample = null }: { country?: string; sample?: import("../db.ts").DbRow[] } = {}) {
+export async function demandIndex(seed: string, { country = 'US', sample = null }: { country?: string; sample?: import("../db.ts").DbRow[] } = {}): Promise<KeywordDemandResponse> {
   const s = seed.toLowerCase().trim();
   const regionLists = await Promise.all(REGIONS.map(r => suggest(s, { country: r })));
   const presentIn = REGIONS.filter((r, i) => regionLists[i].some(x => x.toLowerCase() === s || x.toLowerCase().startsWith(s + ' ')));

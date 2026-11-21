@@ -27,7 +27,7 @@ def card(v): return f'<ytd-compact-video-renderer><ytd-thumbnail><a id="thumbnai
 WATCH = '<!doctype html><html><body><div id="columns"><div id="primary"><div id="below"><ytd-watch-metadata id="above-the-fold"><h1>Fake video</h1></ytd-watch-metadata><div id="comments">comments</div></div></div><div id="secondary">' + ''.join(card(v) for v in vids[1:]) + '</div></div></body></html>'
 SEARCH = '<!doctype html><html><body><ytd-search><div id="contents"><div>result 1</div></div></ytd-search></body></html>'
 CHANNEL = '<!doctype html><html><body><ytd-browse page-subtype="channels"><div id="header"><h1>Channel</h1></div><div id="contents">' + ''.join(f'<ytd-rich-item-renderer><ytd-thumbnail><a id="thumbnail" href="/watch?v={v}"><img></a></ytd-thumbnail></ytd-rich-item-renderer>' for v in vids) + '</div></ytd-browse></body></html>'
-ext = os.path.join(ROOT, 'extension'); errors = []
+ext = os.path.join(ROOT, '..', '..', 'extension'); errors = []
 with sync_playwright() as p:
     ctx = p.chromium.launch_persistent_context(tempfile.mkdtemp(), headless=False, channel='chromium', args=[f'--disable-extensions-except={ext}', f'--load-extension={ext}'])
     pg = ctx.new_page()

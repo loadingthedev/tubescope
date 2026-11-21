@@ -1,0 +1,150 @@
+// JSON wire shapes from apps/api route handlers and their service return values.
+// This package has no runtime exports or dependency on Bun/SQLite.
+export type SettingsResponse = Record<string, string>;
+
+export interface QuotaToday {
+  day: string;
+  units: number;
+  calls: number;
+  cached: number;
+  limit: number;
+  remaining: number;
+  exhausted: boolean;
+  resetsInMinutes: number;
+}
+export interface QuotaResponse {
+  today: QuotaToday;
+  history: { day: string; units: number; calls: number; cached: number | null }[];
+  ai: { day: string; feature: string; calls: number; ok: number; ms: number | null }[];
+}
+
+export interface Channel {
+  id: string;
+  title: string | null;
+  handle: string | null;
+  thumbnail: string | null;
+  description: string | null;
+  country: string | null;
+  kind: 'owned' | 'competitor';
+  uploads_playlist: string | null;
+  subscriber_count: number;
+  view_count: number;
+  video_count: number;
+  published_at: string | null;
+  added_at: string;
+  last_synced: string | null;
+  authorized: boolean;
+  oauth_email: string | null;
+}
+export type ChannelsResponse = Channel[];
+
+export interface KeywordSuggestion {
+  keyword: string;
+  source: 'autocomplete' | 'alphabet' | 'question';
+  words: number;
+}
+export interface KeywordExploreResponse {
+  seed: string;
+  country: string;
+  total: number;
+  autocomplete: string[];
+  longTail: KeywordSuggestion[];
+  questions: KeywordSuggestion[];
+  modifiers: string[];
+  all: KeywordSuggestion[];
+  source: string;
+}
+export interface KeywordDemandResponse {
+  keyword: string;
+  country: string;
+  demandIndex: number;
+  band: 'high' | 'moderate' | 'low' | 'minimal';
+  components: Record<string, number>;
+  weights: Record<string, number>;
+  regionsPresent: string[];
+  homeRank: number | null;
+  note: string;
+}
+
+export interface Video {
+  id: string;
+  channel_id: string;
+  channel_title: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  published_at: string;
+  tags: string[];
+  category_id: string;
+  duration_sec: number;
+  is_short: boolean;
+  is_live: boolean;
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+}
+export interface CompetitionVideo extends Video {
+  channel_subs: number | null;
+  age_days: number;
+  exact_in_title: boolean;
+  partial_in_title: boolean;
+  vpd: number;
+}
+export interface KeywordCompetitionResponse {
+  keyword: string;
+  country: string;
+  sampleSize: number;
+  totalResultsReported: number | null;
+  medianViews: number;
+  medianChannelSubs: number;
+  recentShare: number;
+  exactTitleShare: number;
+  smallChannelShare: number;
+  opportunityScore: number;
+  components: { smallChannelsRanking: number; freshContentRanking: number; titleGap: number; demandProxy: number };
+  formula: string;
+  results: CompetitionVideo[];
+  source: string;
+}
+export interface OutlierVideo extends Video {
+  channel_subs: number;
+  channel_videos: number;
+  channel_thumbnail?: string;
+  age_days: number;
+  vpd: number;
+  subs_ratio: number;
+  breakout_score: number;
+}
+export interface OutlierSearchResponse {
+  query: string;
+  sampleSize: number;
+  results: OutlierVideo[];
+  source: string;
+}
+export interface CompetitorMetrics {
+  id: string;
+  title: string | null;
+  thumbnail: string | null;
+  handle: string | null;
+  kind: 'owned' | 'competitor';
+  subscribers: number;
+  totalViews: number;
+  totalVideos: number;
+  created: string | null;
+  viewsPerVideo: number;
+  uploadsLastN: number;
+  uploadsPerWeek: number;
+  medianViewsLong: number;
+  medianViewsShorts: number;
+  recentMedianViews: number;
+  engagement: number;
+  subsGrowthN: number | null;
+  viewsGrowthN: number | null;
+  snapshotDays: number;
+  librarySynced: number;
+}
+export interface CompetitorComparisonResponse {
+  days: number;
+  channels: CompetitorMetrics[];
+  note: string;
+}
