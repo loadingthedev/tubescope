@@ -1,3 +1,4 @@
+import { Comments } from './comments';
 import { Packaging } from './packaging';
 import { Analytics } from './analytics';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +29,7 @@ const navigation = [
       { to: '/library', label: 'Video library', glyph: '▤' },
       { to: '/analytics', label: 'Analytics', glyph: '▥' },
       { to: '/packaging', label: 'Packaging', glyph: '▧' },
+      { to: '/comments', label: 'Comments', glyph: '☷' },
     ],
   },
   {
@@ -133,6 +135,7 @@ export function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/packaging" element={<Packaging />} />
+            <Route path="/comments" element={<Comments />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
