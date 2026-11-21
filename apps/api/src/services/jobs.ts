@@ -19,7 +19,8 @@ CREATE INDEX IF NOT EXISTS idx_job_runs_name ON job_runs(name, id);
 `);
 
 const JOBS = new Map(); // name -> { expr, tz, fn, catchUp, label, running }
-const isQuota = e => /quotaGuard|quotaExceeded|dailyLimitExceeded/.test(`${e?.reason || ''} ${e?.message || ''}`) || /quota/i.test(e?.message || '') && e?.status === 429;
+const isQuota = e =>
+  /quotaGuard|quotaExceeded|dailyLimitExceeded/.test(`${e?.reason || ''} ${e?.message || ''}`) || (/quota/i.test(e?.message || '') && e?.status === 429);
 
 /** Run a job now (deduplicated: a second call while it runs returns the same promise). */
 export function runJob(name, trigger = 'manual') {
@@ -34,10 +35,17 @@ export function runJob(name, trigger = 'manual') {
       db.prepare('UPDATE job_runs SET finished_at = ?, ok = 1, ms = ? WHERE id = ?').run(new Date().toISOString(), Date.now() - started.getTime(), id);
       return out;
     } catch (e) {
-      db.prepare('UPDATE job_runs SET finished_at = ?, ok = 0, error = ?, ms = ? WHERE id = ?').run(new Date().toISOString(), `${isQuota(e) ? '[quota] ' : ''}${e.message}`.slice(0, 500), Date.now() - started.getTime(), id);
+      db.prepare('UPDATE job_runs SET finished_at = ?, ok = 0, error = ?, ms = ? WHERE id = ?').run(
+        new Date().toISOString(),
+        `${isQuota(e) ? '[quota] ' : ''}${e.message}`.slice(0, 500),
+        Date.now() - started.getTime(),
+        id
+      );
       console.error(`[job ${name}]`, e.message);
       throw e;
-    } finally { j.running = null; }
+    } finally {
+      j.running = null;
+    }
   })();
   j.running.catch(() => {});
   return j.running;
@@ -47,14 +55,32 @@ export function runJob(name, trigger = 'manual') {
  * Schedule a job. catchUp: run it if its most recent scheduled time passed without a successful run since
  * (only for daily/weekly "M H * * D" schedules; frequent jobs simply run at their next tick).
  */
-export function schedule(name, expr, fn, { tz, catchUp = true, label = name, runIfNeverRun = () => false }: { tz?: string; catchUp?: boolean; label?: string; runIfNeverRun?: () => boolean } = {}) {
-  if (!cron.validate(expr)) { console.warn(`[jobs] invalid cron for ${name}: ${expr}`); return null; }
+export function schedule(
+  name,
+  expr,
+  fn,
+  { tz, catchUp = true, label = name, runIfNeverRun = () => false }: { tz?: string; catchUp?: boolean; label?: string; runIfNeverRun?: () => boolean } = {}
+) {
+  if (!cron.validate(expr)) {
+    console.warn(`[jobs] invalid cron for ${name}: ${expr}`);
+    return null;
+  }
   const prev = JOBS.get(name);
   prev?.task?.stop?.();
   // Catch-up only covers runs missed after Tubescope first scheduled this job (a fresh install doesn't fire every
   // daily job at once). runIfNeverRun() lets a job ask for a first run anyway (e.g. today's snapshot).
   if (!getSetting(`job_since_${name}`, '')) setSetting(`job_since_${name}`, new Date().toISOString());
-  const job: { name: string; expr: string; tz: string; fn: () => unknown; catchUp: boolean; label: string; runIfNeverRun: () => boolean; running: Promise<unknown>; task?: ReturnType<typeof cron.schedule> } = { name, expr, tz, fn, catchUp, label, runIfNeverRun, running: null };
+  const job: {
+    name: string;
+    expr: string;
+    tz: string;
+    fn: () => unknown;
+    catchUp: boolean;
+    label: string;
+    runIfNeverRun: () => boolean;
+    running: Promise<unknown>;
+    task?: ReturnType<typeof cron.schedule>;
+  } = { name, expr, tz, fn, catchUp, label, runIfNeverRun, running: null };
   job.task = cron.schedule(expr, () => runJob(name, 'schedule').catch(() => {}), { timezone: tz });
   JOBS.set(name, job);
   return job;
@@ -62,16 +88,37 @@ export function schedule(name, expr, fn, { tz, catchUp = true, label = name, run
 
 // ---------- catch-up ----------
 function zonedParts(date, tz) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', weekday: 'short' }).formatToParts(date).map(x => [x.type, x.value]));
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      weekday: 'short',
+    })
+      .formatToParts(date)
+      .map(x => [x.type, x.value])
+  );
   return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour, mi: +p.minute, dow: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday) };
 }
 /** The Date at local wall-clock y-mo-d h:mi in tz (DST-safe to the minute). */
 function zonedDate(y, mo, d, h, mi, tz) {
   let t = Date.UTC(y, mo - 1, d, h, mi);
-  for (let i = 0; i < 3; i++) { const p = zonedParts(new Date(t), tz); t += (Date.UTC(y, mo - 1, d, h, mi) - Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi)); }
+  for (let i = 0; i < 3; i++) {
+    const p = zonedParts(new Date(t), tz);
+    t += Date.UTC(y, mo - 1, d, h, mi) - Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi);
+  }
   return new Date(t);
 }
-const field = (spec, v) => spec === '*' || spec.split(',').some(part => { const [a, b] = part.split('-').map(Number); return b === undefined ? a === v : v >= a && v <= b; });
+const field = (spec, v) =>
+  spec === '*' ||
+  spec.split(',').some(part => {
+    const [a, b] = part.split('-').map(Number);
+    return b === undefined ? a === v : v >= a && v <= b;
+  });
 /** Most recent time ≤ now that a "M H * * D" schedule fired; null for other shapes (every-N-minutes, lists of hours…). */
 export function lastScheduled(expr, tz, now = new Date()) {
   const f = expr.trim().split(/\s+/);
@@ -87,7 +134,13 @@ export function lastScheduled(expr, tz, now = new Date()) {
   return null;
 }
 export function lastRun(name, { ok }: { ok?: boolean | number } = {}) {
-  return db.prepare(`SELECT * FROM job_runs WHERE name = ? ${ok === undefined ? '' : 'AND ok = ' + (ok ? 1 : 0)} AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1`).get(name) || null;
+  return (
+    db
+      .prepare(
+        `SELECT * FROM job_runs WHERE name = ? ${ok === undefined ? '' : 'AND ok = ' + (ok ? 1 : 0)} AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1`
+      )
+      .get(name) || null
+  );
 }
 /** Jobs whose last scheduled time has no successful run after it (and no attempt in the last 30 minutes). */
 export function overdue(now = new Date()) {
@@ -126,12 +179,36 @@ export function startCatchUp() {
 /** Status of every job, for the health check and Settings. */
 export function status() {
   return [...JOBS.values()].map(j => {
-    const last = lastRun(j.name), ok = lastRun(j.name, { ok: true });
-    const fails = db.prepare('SELECT COUNT(*) n FROM job_runs WHERE name = ? AND ok = 0 AND id > COALESCE((SELECT MAX(id) FROM job_runs WHERE name = ? AND ok = 1), 0)').get(j.name, j.name).n;
-    return { name: j.name, label: j.label, schedule: j.expr, running: !!j.running, lastRun: last?.started_at || null, lastOk: ok?.started_at || null, lastError: last && !last.ok ? last.error : null, failuresInARow: fails, due: lastScheduled(j.expr, j.tz)?.toISOString() || null };
+    const last = lastRun(j.name),
+      ok = lastRun(j.name, { ok: true });
+    const fails = db
+      .prepare('SELECT COUNT(*) n FROM job_runs WHERE name = ? AND ok = 0 AND id > COALESCE((SELECT MAX(id) FROM job_runs WHERE name = ? AND ok = 1), 0)')
+      .get(j.name, j.name).n;
+    return {
+      name: j.name,
+      label: j.label,
+      schedule: j.expr,
+      running: !!j.running,
+      lastRun: last?.started_at || null,
+      lastOk: ok?.started_at || null,
+      lastError: last && !last.ok ? last.error : null,
+      failuresInARow: fails,
+      due: lastScheduled(j.expr, j.tz)?.toISOString() || null,
+    };
   });
 }
-export function prune(days = 60) { return db.prepare("DELETE FROM job_runs WHERE started_at < ?").run(new Date(Date.now() - days * 86400000).toISOString()).changes; }
-export function list() { return [...JOBS.keys()]; }
+export function prune(days = 60) {
+  return db.prepare('DELETE FROM job_runs WHERE started_at < ?').run(new Date(Date.now() - days * 86400000).toISOString()).changes;
+}
+export function list() {
+  return [...JOBS.keys()];
+}
 /** Stop every schedule (shutdown, tests). */
-export function stopAll() { for (const j of JOBS.values()) j.task?.stop?.(); JOBS.clear(); if (catchUpTimer) { clearInterval(catchUpTimer); catchUpTimer = null; } }
+export function stopAll() {
+  for (const j of JOBS.values()) j.task?.stop?.();
+  JOBS.clear();
+  if (catchUpTimer) {
+    clearInterval(catchUpTimer);
+    catchUpTimer = null;
+  }
+}

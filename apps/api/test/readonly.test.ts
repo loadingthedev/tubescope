@@ -15,7 +15,10 @@ const cfg = await import('../src/services/settings-schema.ts');
 test('every YouTube write throws before fetch, including missing options and thumbnail uploads', async () => {
   const original = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = (async () => { calls++; throw new Error('unexpected fetch'); }) as unknown as typeof fetch;
+  globalThis.fetch = (async () => {
+    calls++;
+    throw new Error('unexpected fetch');
+  }) as unknown as typeof fetch;
   try {
     for (const endpoint of ['videos.update', 'comments.insert', 'playlists.insert', 'playlistItems.insert', 'thumbnails.set', 'anything']) {
       await assert.rejects(ytWrite(endpoint, { channelId: 'owner' }), { message: 'Tubescope fork is read-only: writes to YouTube are disabled' });
@@ -23,11 +26,17 @@ test('every YouTube write throws before fetch, including missing options and thu
     await assert.rejects(ytWrite(), /Tubescope fork is read-only: writes to YouTube are disabled/);
     await assert.rejects(setThumbnail('owner', 'video', '/missing.jpg'), /Tubescope fork is read-only: writes to YouTube are disabled/);
     assert.equal(calls, 0);
-  } finally { globalThis.fetch = original; }
+  } finally {
+    globalThis.fetch = original;
+  }
 });
 
 test('OAuth requests only read-only scopes; saved auto mode cannot enable writes', () => {
-  assert.deepEqual(SCOPES, ['https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/yt-analytics.readonly', 'https://www.googleapis.com/auth/yt-analytics-monetary.readonly']);
+  assert.deepEqual(SCOPES, [
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/yt-analytics.readonly',
+    'https://www.googleapis.com/auth/yt-analytics-monetary.readonly',
+  ]);
   setSetting('google_client_id', 'test');
   const url = new URL(authUrl());
   assert.equal(url.searchParams.get('scope'), SCOPES.join(' '));

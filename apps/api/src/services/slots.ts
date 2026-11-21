@@ -7,13 +7,26 @@ import { buildCorpus } from './radar.ts';
 import { mean } from './stats.ts';
 
 export const tz = () => getSetting('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone);
-const DAY = 86400000, HOUR = 3600000;
+const DAY = 86400000,
+  HOUR = 3600000;
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** Local weekday (0-6) and hour (0-23) of an instant in the configured time zone. */
 export function localParts(ms, zone = tz()) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', hour: 'numeric', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', minute: '2-digit' })
-    .formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      weekday: 'short',
+      hour: 'numeric',
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      minute: '2-digit',
+    })
+      .formatToParts(new Date(ms))
+      .map(x => [x.type, x.value])
+  );
   return { dow: DOW.indexOf(p.weekday), hour: Number(p.hour) % 24, minute: Number(p.minute), date: `${p.year}-${p.month}-${p.day}` };
 }
 /** UTC instant for a local wall-clock time (date YYYY-MM-DD, hour) in the zone — handles daylight saving. */
@@ -22,7 +35,7 @@ export function zonedInstant(date, hour, zone = tz()) {
   let guess = Date.UTC(y, m - 1, d, hour, 0, 0);
   for (let i = 0; i < 3; i++) {
     const p = localParts(guess, zone);
-    const diff = (p.hour - hour) * HOUR + (p.date === date ? 0 : (p.date < date ? -DAY : DAY));
+    const diff = (p.hour - hour) * HOUR + (p.date === date ? 0 : p.date < date ? -DAY : DAY);
     if (!diff && p.minute === 0) break;
     guess -= diff + p.minute * 60000;
   }
@@ -36,9 +49,12 @@ export function slotModel(channelId: string, { format = null }: { format?: strin
   let rows = format ? corpus.filter(r => r.is_short === (format === 'short')) : corpus;
   if (rows.length < 8) rows = corpus; // too few of this format: use all uploads
   const K = 4; // shrinkage: a slot needs ~4 uploads to count fully
-  const agg = (keyFn) => {
+  const agg = keyFn => {
     const g: Record<string, number[]> = {};
-    for (const r of rows) { const k = keyFn(r); (g[k] ||= []).push(r.y); }
+    for (const r of rows) {
+      const k = keyFn(r);
+      (g[k] ||= []).push(r.y);
+    }
     return Object.fromEntries(Object.entries(g).map(([k, ys]) => [k, { n: ys.length, effect: (mean(ys) * ys.length) / (ys.length + K) }]));
   };
   const parts = r => localParts(r.ts, zone);
@@ -46,7 +62,10 @@ export function slotModel(channelId: string, { format = null }: { format?: strin
   const byDow = agg(r => parts(r).dow);
   // Most common historic upload hour per block (so we pick a familiar time inside a good block).
   const hourCounts = {};
-  for (const r of rows) { const h = parts(r).hour; hourCounts[h] = (hourCounts[h] || 0) + 1; }
+  for (const r of rows) {
+    const h = parts(r).hour;
+    hourCounts[h] = (hourCounts[h] || 0) + 1;
+  }
   return { n: rows.length, byBlock, byDow, hourCounts, zone, format: format || 'all' };
 }
 
@@ -54,9 +73,22 @@ export function slotModel(channelId: string, { format = null }: { format?: strin
  * Next `count` publish slots, ≥ minGapHours apart, at least leadMinutes from now, avoiding slots already taken
  * (scheduled uploads in the publish queue). Returns [{at, local, expectedX, source}].
  */
-const nextDate = (date, n) => { const [y, m, d] = date.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+const nextDate = (date, n) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
 
-export function bestSlots(channelId: string, { format = null, count = 3, from = Date.now(), minGapHours = 20, leadMinutes = 120, days = 10 }: { format?: string; count?: number; from?: number; minGapHours?: number; leadMinutes?: number; days?: number } = {}) {
+export function bestSlots(
+  channelId: string,
+  {
+    format = null,
+    count = 3,
+    from = Date.now(),
+    minGapHours = 20,
+    leadMinutes = 120,
+    days = 10,
+  }: { format?: string; count?: number; from?: number; minGapHours?: number; leadMinutes?: number; days?: number } = {}
+) {
   const m = slotModel(channelId, { format });
   const zone = m.zone;
   const taken = [];
@@ -91,14 +123,29 @@ export function bestSlots(channelId: string, { format = null, count = 3, from = 
     at: new Date(c.at).toISOString(),
     local: new Date(c.at).toLocaleString('en-US', { timeZone: zone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }),
     expectedX: enough ? +(2 ** c.effect).toFixed(2) : null,
-    source: enough ? `your ${m.n} uploads by local weekday and 3-hour block (${zone})` : `not enough history yet (${m.n} uploads) — default ${fallbackHour}:00 ${zone}`,
+    source: enough
+      ? `your ${m.n} uploads by local weekday and 3-hour block (${zone})`
+      : `not enough history yet (${m.n} uploads) — default ${fallbackHour}:00 ${zone}`,
   }));
 }
 
 /** Heatmap data for the UI: effect by weekday × block. */
 export function slotGrid(channelId: string, { format = null }: { format?: string } = {}) {
   const m = slotModel(channelId, { format });
-  return { n: m.n, zone: m.zone, format: m.format,
-    blocks: Object.entries(m.byBlock).map(([b, v]) => ({ block: Number(b), label: `${String(Number(b) * 3).padStart(2, '0')}–${String(Number(b) * 3 + 3).padStart(2, '0')}`, n: v.n, x: +(2 ** v.effect).toFixed(2) })).sort((a, b) => a.block - b.block),
-    weekdays: Object.entries(m.byDow).map(([d, v]) => ({ dow: Number(d), label: DOW[d], n: v.n, x: +(2 ** v.effect).toFixed(2) })).sort((a, b) => a.dow - b.dow) };
+  return {
+    n: m.n,
+    zone: m.zone,
+    format: m.format,
+    blocks: Object.entries(m.byBlock)
+      .map(([b, v]) => ({
+        block: Number(b),
+        label: `${String(Number(b) * 3).padStart(2, '0')}–${String(Number(b) * 3 + 3).padStart(2, '0')}`,
+        n: v.n,
+        x: +(2 ** v.effect).toFixed(2),
+      }))
+      .sort((a, b) => a.block - b.block),
+    weekdays: Object.entries(m.byDow)
+      .map(([d, v]) => ({ dow: Number(d), label: DOW[d], n: v.n, x: +(2 ** v.effect).toFixed(2) }))
+      .sort((a, b) => a.dow - b.dow),
+  };
 }

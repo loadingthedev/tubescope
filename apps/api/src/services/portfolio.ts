@@ -8,14 +8,18 @@ import { watchHours } from './analytics.ts';
 import { channelSummary } from './reach.ts';
 import { currentModel } from './radar.ts';
 import { notify } from './notify.ts';
-import './autopilot.ts'; import './ideas.ts'; // their tables are read here
+import './autopilot.ts';
+import './ideas.ts'; // their tables are read here
 
 const DAY = 86400000;
 const dayStr = ms => new Date(ms).toISOString().slice(0, 10);
 
 /** Value of a snapshot metric on (or nearest before) a day. */
 function snapAt(type, id, day, field = 'views') {
-  return db.prepare(`SELECT ${field} AS v, day FROM snapshots WHERE entity_type = ? AND entity_id = ? AND day <= ? ORDER BY day DESC LIMIT 1`).get(type, id, day) || null;
+  return (
+    db.prepare(`SELECT ${field} AS v, day FROM snapshots WHERE entity_type = ? AND entity_id = ? AND day <= ? ORDER BY day DESC LIMIT 1`).get(type, id, day) ||
+    null
+  );
 }
 /** Change in a channel metric over the last `days` and the `days` before that (from daily snapshots). */
 export function deltas(channelId: string, days = 7, field = 'views') {
@@ -31,39 +35,78 @@ export function deltas(channelId: string, days = 7, field = 'views') {
 /** Uploads that gained the most views in the last `days` (snapshot deltas; new uploads count from zero). */
 export function topGainers(channelId: string, days = 7, limit = 3) {
   const since = dayStr(Date.now() - days * DAY);
-  return db.prepare('SELECT id, title, view_count, published_at, is_short FROM videos WHERE channel_id = ? AND is_live = 0').all(channelId).map(v => {
-    const base = snapAt('video', v.id, since);
-    const gained = v.published_at >= since ? v.view_count : base ? v.view_count - base.v : null;
-    return { ...v, gained };
-  }).filter(v => v.gained !== null && v.gained > 0).sort((a, b) => b.gained - a.gained).slice(0, limit);
+  return db
+    .prepare('SELECT id, title, view_count, published_at, is_short FROM videos WHERE channel_id = ? AND is_live = 0')
+    .all(channelId)
+    .map(v => {
+      const base = snapAt('video', v.id, since);
+      const gained = v.published_at >= since ? v.view_count : base ? v.view_count - base.v : null;
+      return { ...v, gained };
+    })
+    .filter(v => v.gained !== null && v.gained > 0)
+    .sort((a, b) => b.gained - a.gained)
+    .slice(0, limit);
 }
 
 async function ypp(channelId) {
   if (!isAuthorized(channelId)) return null;
-  try { const w = await watchHours(channelId, 365); return { watchHours: Math.round(w.publicWatchHours), watchHoursPct: w.ypp.watchHoursPct, subs: w.subscribers, subsPct: w.ypp.subsPct }; }
-  catch { return null; }
+  try {
+    const w = await watchHours(channelId, 365);
+    return { watchHours: Math.round(w.publicWatchHours), watchHoursPct: w.ypp.watchHoursPct, subs: w.subscribers, subsPct: w.ypp.subsPct };
+  } catch {
+    return null;
+  }
 }
 
 export async function channelCard(ch) {
   const id = ch.id;
-  const views = deltas(id, 7, 'views'), subs = deltas(id, 7, 'subs');
-  const latest = db.prepare('SELECT id, title, thumbnail, published_at, is_short FROM videos WHERE channel_id = ? AND is_live = 0 ORDER BY published_at DESC LIMIT 1').get(id) || null;
+  const views = deltas(id, 7, 'views'),
+    subs = deltas(id, 7, 'subs');
+  const latest =
+    db
+      .prepare('SELECT id, title, thumbnail, published_at, is_short FROM videos WHERE channel_id = ? AND is_live = 0 ORDER BY published_at DESC LIMIT 1')
+      .get(id) || null;
   const w = latest ? db.prepare('SELECT idx, status, confidence, ctr, ctr_vs_channel FROM radar_watch WHERE video_id = ?').get(latest.id) : null;
   const reach = channelSummary(id, { days: 28 });
-  const ap = db.prepare("SELECT status, COUNT(*) AS n FROM autopilot_actions WHERE channel_id = ? AND created_at >= datetime('now', '-7 days') GROUP BY status").all(id);
-  const idea = db.prepare("SELECT best_title, score, predicted_x FROM radar_ideas WHERE channel_id = ? AND status != 'dismissed' ORDER BY day DESC, rank LIMIT 1").get(id) || null;
+  const ap = db
+    .prepare("SELECT status, COUNT(*) AS n FROM autopilot_actions WHERE channel_id = ? AND created_at >= datetime('now', '-7 days') GROUP BY status")
+    .all(id);
+  const idea =
+    db
+      .prepare("SELECT best_title, score, predicted_x FROM radar_ideas WHERE channel_id = ? AND status != 'dismissed' ORDER BY day DESC, rank LIMIT 1")
+      .get(id) || null;
   const model = currentModel(id);
   return {
-    id, title: ch.title, thumbnail: ch.thumbnail, handle: ch.handle, authorized: !!ch.authorized,
-    subscribers: ch.subscriber_count, totalViews: ch.view_count, videoCount: ch.video_count,
-    views7: views.last, views7Prev: views.prev, views7Change: views.change, subs7: subs.last,
-    uploads30: db.prepare("SELECT COUNT(*) AS n FROM videos WHERE channel_id = ? AND published_at >= ?").get(id, new Date(Date.now() - 30 * DAY).toISOString()).n,
-    latest: latest && { ...latest, pace: w?.idx ?? null, status: w?.status ?? null, confidence: w?.confidence ?? null, ctr: w?.ctr ?? null, ctrVsUsual: w?.ctr_vs_channel ?? null },
-    ctr28: reach.totals.ctr, impressions28: reach.totals.impressions, ctrStatus: reach.status,
+    id,
+    title: ch.title,
+    thumbnail: ch.thumbnail,
+    handle: ch.handle,
+    authorized: !!ch.authorized,
+    subscribers: ch.subscriber_count,
+    totalViews: ch.view_count,
+    videoCount: ch.video_count,
+    views7: views.last,
+    views7Prev: views.prev,
+    views7Change: views.change,
+    subs7: subs.last,
+    uploads30: db.prepare('SELECT COUNT(*) AS n FROM videos WHERE channel_id = ? AND published_at >= ?').get(id, new Date(Date.now() - 30 * DAY).toISOString())
+      .n,
+    latest: latest && {
+      ...latest,
+      pace: w?.idx ?? null,
+      status: w?.status ?? null,
+      confidence: w?.confidence ?? null,
+      ctr: w?.ctr ?? null,
+      ctrVsUsual: w?.ctr_vs_channel ?? null,
+    },
+    ctr28: reach.totals.ctr,
+    impressions28: reach.totals.impressions,
+    ctrStatus: reach.status,
     ypp: await ypp(id),
     alertsOpen: db.prepare('SELECT COUNT(*) AS n FROM alerts WHERE channel_id = ? AND read = 0').get(id).n,
     autopilot7: Object.fromEntries(ap.map(a => [a.status, a.n])),
-    topIdea: idea, radar: { calibrated: model.calibrated, verdict: model.metrics?.holdout?.verdict || null },
+    topIdea: idea,
+    radar: { calibrated: model.calibrated, verdict: model.metrics?.holdout?.verdict || null },
     topGainers: topGainers(id, 7, 3),
   };
 }
@@ -72,11 +115,20 @@ export async function overview() {
   const channels = [];
   for (const ch of listChannels('owned')) channels.push(await channelCard(ch));
   const sum = k => channels.reduce((a, c) => a + (c[k] || 0), 0);
-  return { generatedAt: new Date().toISOString(), totals: { subscribers: sum('subscribers'), views7: channels.some(c => c.views7 !== null) ? sum('views7') : null, subs7: channels.some(c => c.subs7 !== null) ? sum('subs7') : null, alertsOpen: sum('alertsOpen') }, channels };
+  return {
+    generatedAt: new Date().toISOString(),
+    totals: {
+      subscribers: sum('subscribers'),
+      views7: channels.some(c => c.views7 !== null) ? sum('views7') : null,
+      subs7: channels.some(c => c.subs7 !== null) ? sum('subs7') : null,
+      alertsOpen: sum('alertsOpen'),
+    },
+    channels,
+  };
 }
 
-const n = x => x === null || x === undefined ? '—' : Math.round(x).toLocaleString('en-US');
-const pctChange = c => c === null || c === undefined ? '' : ` (${c >= 0 ? '+' : ''}${Math.round(c * 100)}% vs last week)`;
+const n = x => (x === null || x === undefined ? '—' : Math.round(x).toLocaleString('en-US'));
+const pctChange = c => (c === null || c === undefined ? '' : ` (${c >= 0 ? '+' : ''}${Math.round(c * 100)}% vs last week)`);
 
 /** Plain-text weekly summary (also sent to the phone). */
 export async function weeklySummary({ send = true }: { send?: boolean } = {}) {

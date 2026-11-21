@@ -28,7 +28,16 @@ function retryAfterMs(res) {
  * - retryStatus(res): optional extra check (e.g. YouTube's 403 rateLimitExceeded) — async, may read a clone.
  * Returns the last Response; throws the last network error if every attempt failed to connect.
  */
-export async function fetchRetry(url: string | URL | Request, init: RequestInit = {}, { retries = 3, timeoutMs = 30_000, idempotent, retryStatus }: { retries?: number; timeoutMs?: number; idempotent?: boolean; retryStatus?: (response: Response) => Promise<boolean> } = {}) {
+export async function fetchRetry(
+  url: string | URL | Request,
+  init: RequestInit = {},
+  {
+    retries = 3,
+    timeoutMs = 30_000,
+    idempotent,
+    retryStatus,
+  }: { retries?: number; timeoutMs?: number; idempotent?: boolean; retryStatus?: (response: Response) => Promise<boolean> } = {}
+) {
   const method = (init.method || 'GET').toUpperCase();
   const safe = idempotent ?? ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'].includes(method);
   let lastErr;
@@ -40,10 +49,13 @@ export async function fetchRetry(url: string | URL | Request, init: RequestInit 
     } catch (e) {
       lastErr = e;
       const timeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
-      if (attempt < retries && (neverSent(e) || (safe && (timeout || e instanceof TypeError)))) { await sleep(backoff); continue; }
+      if (attempt < retries && (neverSent(e) || (safe && (timeout || e instanceof TypeError)))) {
+        await sleep(backoff);
+        continue;
+      }
       throw e;
     }
-    const again = safe && (TRANSIENT_STATUS.has(res.status) || (retryStatus && await retryStatus(res.clone()).catch(() => false)));
+    const again = safe && (TRANSIENT_STATUS.has(res.status) || (retryStatus && (await retryStatus(res.clone()).catch(() => false))));
     if (!again || attempt === retries) return res;
     await res.arrayBuffer().catch(() => {});
     await sleep(retryAfterMs(res) ?? backoff);

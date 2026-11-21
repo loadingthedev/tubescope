@@ -11,12 +11,18 @@ const localDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA').format(d);
 
 export function list() {
   if (!fs.existsSync(BACKUP_DIR)) return [];
-  return fs.readdirSync(BACKUP_DIR).filter(n => NAME.test(n)).map(n => {
-    const st = fs.statSync(path.join(BACKUP_DIR, n));
-    return { file: n, day: NAME.exec(n)[1], bytes: st.size, at: st.mtime.toISOString() };
-  }).sort((a, b) => b.file.localeCompare(a.file));
+  return fs
+    .readdirSync(BACKUP_DIR)
+    .filter(n => NAME.test(n))
+    .map(n => {
+      const st = fs.statSync(path.join(BACKUP_DIR, n));
+      return { file: n, day: NAME.exec(n)[1], bytes: st.size, at: st.mtime.toISOString() };
+    })
+    .sort((a, b) => b.file.localeCompare(a.file));
 }
-export function latest() { return list()[0] || null; }
+export function latest() {
+  return list()[0] || null;
+}
 
 /** Make a backup now (one per day by default; `force` adds a timestamped extra). Verifies it opens cleanly. */
 export async function create({ force = false }: { force?: boolean } = {}) {
@@ -35,7 +41,10 @@ export async function create({ force = false }: { force?: boolean } = {}) {
     throw e;
   }
   const check = verify(tmp);
-  if (!check.ok) { fs.rmSync(tmp, { force: true }); throw new Error(`backup failed its integrity check: ${check.error}`); }
+  if (!check.ok) {
+    fs.rmSync(tmp, { force: true });
+    throw new Error(`backup failed its integrity check: ${check.error}`);
+  }
   fs.renameSync(tmp, path.join(BACKUP_DIR, name));
   const pruned = prune();
   return { created: name, bytes: fs.statSync(path.join(BACKUP_DIR, name)).size, pruned };
@@ -47,18 +56,25 @@ export function verify(file) {
     const hasSettings = t.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='settings'").get();
     t.close(true);
     return r === 'ok' && hasSettings ? { ok: true } : { ok: false, error: r === 'ok' ? 'not a Tubescope database' : r };
-  } catch (e) { return { ok: false, error: e.message }; }
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 }
 /** Keep the newest 7 days, plus one backup per Sunday for 8 weeks. Extra timestamped backups go after 7 days. */
 export function prune(now = new Date()) {
   const removed = [];
-  const keepDays = new Set(), sundays = [];
+  const keepDays = new Set(),
+    sundays = [];
   for (let i = 0; i < 7; i++) keepDays.add(localDay(new Date(now.getTime() - i * 86400000)));
   for (const b of list()) {
     const d = new Date(`${b.day}T12:00:00`);
     if (keepDays.has(b.day)) continue;
-    if (d.getDay() === 0 && !NAME.exec(b.file)[2] && sundays.length < 8) { sundays.push(b.file); continue; }
-    fs.rmSync(path.join(BACKUP_DIR, b.file), { force: true }); removed.push(b.file);
+    if (d.getDay() === 0 && !NAME.exec(b.file)[2] && sundays.length < 8) {
+      sundays.push(b.file);
+      continue;
+    }
+    fs.rmSync(path.join(BACKUP_DIR, b.file), { force: true });
+    removed.push(b.file);
   }
   return removed;
 }
@@ -84,8 +100,16 @@ export function maintenance() {
   const out: Record<string, number> = {};
   out.cache = db.prepare('DELETE FROM api_cache WHERE expires_at < ?').run(Date.now()).changes;
   out.apiLog = db.prepare('DELETE FROM api_log WHERE day < ?').run(cut(120)).changes;
-  try { out.aiLog = db.prepare('DELETE FROM ai_log WHERE ts < ?').run(cut(180)).changes; } catch { /* older schema */ }
-  try { out.alerts = db.prepare('DELETE FROM alerts WHERE created_at < ? AND COALESCE(read, 0) = 1').run(cut(180)).changes; } catch { /* */ }
+  try {
+    out.aiLog = db.prepare('DELETE FROM ai_log WHERE ts < ?').run(cut(180)).changes;
+  } catch {
+    /* older schema */
+  }
+  try {
+    out.alerts = db.prepare('DELETE FROM alerts WHERE created_at < ? AND COALESCE(read, 0) = 1').run(cut(180)).changes;
+  } catch {
+    /* */
+  }
   db.exec('PRAGMA optimize');
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   return out;

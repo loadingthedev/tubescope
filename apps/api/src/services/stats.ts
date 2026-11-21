@@ -18,7 +18,9 @@ export function stddev(arr) {
   const a = arr.filter(x => Number.isFinite(x));
   return a.length ? Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / a.length) : 0;
 }
-export function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+export function clamp(x, lo, hi) {
+  return Math.max(lo, Math.min(hi, x));
+}
 export function fmtNum(n) {
   if (n === null || n === undefined) return '—';
   if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(1) + 'B';

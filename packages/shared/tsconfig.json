@@ -3,12 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "types": [],
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "noImplicitAny": true
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

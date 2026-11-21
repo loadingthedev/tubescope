@@ -6,11 +6,31 @@ import { fetchRetry } from '../lib/http.ts';
 
 const BASE = process.env.YT_ANALYTICS_BASE || 'https://youtubeanalytics.googleapis.com/v2/reports';
 
-export async function analyticsQuery(channelId: string, { startDate, endDate, metrics, dimensions, filters, sort, maxResults, ttl = 3 * 3600 }: { startDate?: string; endDate?: string; metrics?: string; dimensions?: string; filters?: string; sort?: string; maxResults?: number; ttl?: number }) {
+export async function analyticsQuery(
+  channelId: string,
+  {
+    startDate,
+    endDate,
+    metrics,
+    dimensions,
+    filters,
+    sort,
+    maxResults,
+    ttl = 3 * 3600,
+  }: { startDate?: string; endDate?: string; metrics?: string; dimensions?: string; filters?: string; sort?: string; maxResults?: number; ttl?: number }
+) {
   const params = { ids: 'channel==MINE', startDate, endDate, metrics, dimensions, filters, sort, maxResults };
-  const key = 'ya:' + crypto.createHash('sha1').update(channelId + JSON.stringify(params)).digest('hex');
+  const key =
+    'ya:' +
+    crypto
+      .createHash('sha1')
+      .update(channelId + JSON.stringify(params))
+      .digest('hex');
   const hit = cacheGet(key);
-  if (hit) { logApi({ api: 'analytics', endpoint: 'reports.query', units: 0, cached: 1 }); return hit; }
+  if (hit) {
+    logApi({ api: 'analytics', endpoint: 'reports.query', units: 0, cached: 1 });
+    return hit;
+  }
   const url = new URL(BASE);
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
   const t0 = Date.now();
@@ -19,7 +39,11 @@ export async function analyticsQuery(channelId: string, { startDate, endDate, me
   const ms = Date.now() - t0;
   if (!res.ok) {
     logApi({ api: 'analytics', endpoint: 'reports.query', units: 0, cached: 0, ms, ok: 0 });
-    throw new YouTubeError(body?.error?.message || `Analytics API error ${res.status}`, { status: res.status, reason: body?.error?.status, endpoint: 'analytics' });
+    throw new YouTubeError(body?.error?.message || `Analytics API error ${res.status}`, {
+      status: res.status,
+      reason: body?.error?.status,
+      endpoint: 'analytics',
+    });
   }
   logApi({ api: 'analytics', endpoint: 'reports.query', units: 0, cached: 0, ms });
   const out = toObjects(body);
@@ -34,7 +58,9 @@ function toObjects(body) {
 }
 
 export function dateRange(days) {
-  const end = new Date(); end.setUTCDate(end.getUTCDate() - 3); // Analytics lags ~2-3 days
-  const start = new Date(end); start.setUTCDate(start.getUTCDate() - days + 1);
+  const end = new Date();
+  end.setUTCDate(end.getUTCDate() - 3); // Analytics lags ~2-3 days
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - days + 1);
   return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
 }

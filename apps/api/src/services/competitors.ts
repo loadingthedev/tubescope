@@ -5,7 +5,12 @@ import { addChannel, getChannel, publicChannel, syncVideos, channelHistory, hydr
 import { median, mean, daysSince } from './stats.ts';
 
 export function listCompetitors(ownedId: string) {
-  return db.prepare(`SELECT c.*, l.note, l.added_at AS linked_at FROM competitor_links l JOIN channels c ON c.id = l.competitor_channel_id WHERE l.owned_channel_id = ? ORDER BY c.subscriber_count DESC`).all(ownedId).map(publicChannel);
+  return db
+    .prepare(
+      `SELECT c.*, l.note, l.added_at AS linked_at FROM competitor_links l JOIN channels c ON c.id = l.competitor_channel_id WHERE l.owned_channel_id = ? ORDER BY c.subscriber_count DESC`
+    )
+    .all(ownedId)
+    .map(publicChannel);
 }
 
 export async function addCompetitor(ownedId: string, input, note = '') {
@@ -29,17 +34,28 @@ function channelMetrics(id, days = 30) {
   const ch = db.prepare('SELECT * FROM channels WHERE id = ?').get(id);
   const vids = db.prepare('SELECT * FROM videos WHERE channel_id = ? AND is_live = 0').all(id).map(hydrateVideo);
   const recent = vids.filter(v => daysSince(v.published_at) <= days);
-  const long = vids.filter(v => !v.is_short), shorts = vids.filter(v => v.is_short);
+  const long = vids.filter(v => !v.is_short),
+    shorts = vids.filter(v => v.is_short);
   const hist = channelHistory(id, days);
-  const first = hist[0], last = hist[hist.length - 1];
+  const first = hist[0],
+    last = hist[hist.length - 1];
   return {
-    id, title: ch.title, thumbnail: ch.thumbnail, handle: ch.handle, kind: ch.kind,
-    subscribers: ch.subscriber_count, totalViews: ch.view_count, totalVideos: ch.video_count, created: ch.published_at,
+    id,
+    title: ch.title,
+    thumbnail: ch.thumbnail,
+    handle: ch.handle,
+    kind: ch.kind,
+    subscribers: ch.subscriber_count,
+    totalViews: ch.view_count,
+    totalVideos: ch.video_count,
+    created: ch.published_at,
     viewsPerVideo: ch.video_count ? Math.round(ch.view_count / ch.video_count) : 0,
-    uploadsLastN: recent.length, uploadsPerWeek: +(recent.length / (days / 7)).toFixed(2),
-    medianViewsLong: median(long.map(v => v.view_count)), medianViewsShorts: median(shorts.map(v => v.view_count)),
+    uploadsLastN: recent.length,
+    uploadsPerWeek: +(recent.length / (days / 7)).toFixed(2),
+    medianViewsLong: median(long.map(v => v.view_count)),
+    medianViewsShorts: median(shorts.map(v => v.view_count)),
     recentMedianViews: median(recent.map(v => v.view_count)),
-    engagement: mean(vids.slice(0, 50).map(v => v.view_count ? (v.like_count + v.comment_count) / v.view_count : 0)),
+    engagement: mean(vids.slice(0, 50).map(v => (v.view_count ? (v.like_count + v.comment_count) / v.view_count : 0))),
     subsGrowthN: first && last && hist.length > 1 ? last.subs - first.subs : null,
     viewsGrowthN: first && last && hist.length > 1 ? last.views - first.views : null,
     snapshotDays: hist.length,
@@ -48,14 +64,28 @@ function channelMetrics(id, days = 30) {
 }
 
 export function compare(ownedId: string, days = 30): CompetitorComparisonResponse {
-  const ids = [ownedId, ...db.prepare('SELECT competitor_channel_id AS id FROM competitor_links WHERE owned_channel_id = ?').all(ownedId).map(r => r.id)];
-  return { days, channels: ids.map(id => channelMetrics(id, days)), note: 'Growth columns need daily snapshots (scheduler); medians come from synced libraries, so sync depth matters.' };
+  const ids = [
+    ownedId,
+    ...db
+      .prepare('SELECT competitor_channel_id AS id FROM competitor_links WHERE owned_channel_id = ?')
+      .all(ownedId)
+      .map(r => r.id),
+  ];
+  return {
+    days,
+    channels: ids.map(id => channelMetrics(id, days)),
+    note: 'Growth columns need daily snapshots (scheduler); medians come from synced libraries, so sync depth matters.',
+  };
 }
 
 export function uploadFeed(ownedId: string, { days = 14, limit = 100 }: { days?: number; limit?: number } = {}) {
-  return db.prepare(`SELECT v.*, c.title AS channel_title, c.thumbnail AS channel_thumbnail, c.subscriber_count AS channel_subs FROM videos v JOIN channels c ON c.id = v.channel_id
-    WHERE v.channel_id IN (SELECT competitor_channel_id FROM competitor_links WHERE owned_channel_id = ?) AND v.published_at >= datetime('now', ?) ORDER BY v.published_at DESC LIMIT ?`)
-    .all(ownedId, `-${days} days`, limit).map(hydrateVideo);
+  return db
+    .prepare(
+      `SELECT v.*, c.title AS channel_title, c.thumbnail AS channel_thumbnail, c.subscriber_count AS channel_subs FROM videos v JOIN channels c ON c.id = v.channel_id
+    WHERE v.channel_id IN (SELECT competitor_channel_id FROM competitor_links WHERE owned_channel_id = ?) AND v.published_at >= datetime('now', ?) ORDER BY v.published_at DESC LIMIT ?`
+    )
+    .all(ownedId, `-${days} days`, limit)
+    .map(hydrateVideo);
 }
 
 /** Refresh every competitor of an owned channel; emit alerts for new uploads and breakouts. */
@@ -63,7 +93,12 @@ export async function refreshAll(ownedId: string, { maxVideos = 50 }: { maxVideo
   const comps = listCompetitors(ownedId);
   const alerts = [];
   for (const c of comps) {
-    const before = new Set(db.prepare('SELECT id FROM videos WHERE channel_id = ?').all(c.id).map(r => r.id));
+    const before = new Set(
+      db
+        .prepare('SELECT id FROM videos WHERE channel_id = ?')
+        .all(c.id)
+        .map(r => r.id)
+    );
     await refreshChannel(c.id, { force: true }).catch(() => {});
     const r = await syncVideos(c.id, { maxVideos, force: true }).catch(e => ({ error: e.message }));
     const after = db.prepare('SELECT * FROM videos WHERE channel_id = ? ORDER BY published_at DESC LIMIT 50').all(c.id).map(hydrateVideo);
@@ -72,35 +107,67 @@ export async function refreshAll(ownedId: string, { maxVideos = 50 }: { maxVideo
     const med = median(after.filter(v => !v.is_short).map(v => v.view_count)) || 0;
     for (const v of after.filter(v => daysSince(v.published_at) <= 14 && med && v.view_count >= 3 * med)) {
       const exists = db.prepare("SELECT 1 FROM alerts WHERE kind = 'breakout' AND payload_json LIKE ?").get(`%${v.id}%`);
-      if (!exists) alerts.push(addAlert(ownedId, 'breakout', `${c.title}: "${v.title}" is at ${(v.view_count / med).toFixed(1)}× their median`, { videoId: v.id, channelId: c.id, x: v.view_count / med }));
+      if (!exists)
+        alerts.push(
+          addAlert(ownedId, 'breakout', `${c.title}: "${v.title}" is at ${(v.view_count / med).toFixed(1)}× their median`, {
+            videoId: v.id,
+            channelId: c.id,
+            x: v.view_count / med,
+          })
+        );
     }
-    if ((r as { metadataChanges?: number })?.metadataChanges) alerts.push(addAlert(ownedId, 'metadata_change', `${c.title} changed packaging on ${(r as { metadataChanges?: number }).metadataChanges} field(s)`, { channelId: c.id }));
+    if ((r as { metadataChanges?: number })?.metadataChanges)
+      alerts.push(
+        addAlert(ownedId, 'metadata_change', `${c.title} changed packaging on ${(r as { metadataChanges?: number }).metadataChanges} field(s)`, {
+          channelId: c.id,
+        })
+      );
   }
   return { refreshed: comps.length, alerts };
 }
 
 export function addAlert(channelId: string, kind, title: string, payload) {
-  const r = db.prepare('INSERT INTO alerts (channel_id, kind, title, payload_json) VALUES (?, ?, ?, ?)').run(channelId, kind, title, JSON.stringify(payload || {}));
+  const r = db
+    .prepare('INSERT INTO alerts (channel_id, kind, title, payload_json) VALUES (?, ?, ?, ?)')
+    .run(channelId, kind, title, JSON.stringify(payload || {}));
   const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(r.lastInsertRowid);
   onAlert(alert); // forwards the kinds the user wants on their phone (fire-and-forget)
   return alert;
 }
 export function listAlerts(channelId: string, { unreadOnly = false, limit = 100 }: { unreadOnly?: boolean; limit?: number } = {}) {
-  return db.prepare(`SELECT * FROM alerts WHERE (channel_id = ? OR channel_id IS NULL) ${unreadOnly ? 'AND read = 0' : ''} ORDER BY created_at DESC LIMIT ?`).all(channelId, limit).map(a => ({ ...a, payload: JSON.parse(a.payload_json || '{}') }));
+  return db
+    .prepare(`SELECT * FROM alerts WHERE (channel_id = ? OR channel_id IS NULL) ${unreadOnly ? 'AND read = 0' : ''} ORDER BY created_at DESC LIMIT ?`)
+    .all(channelId, limit)
+    .map(a => ({ ...a, payload: JSON.parse(a.payload_json || '{}') }));
 }
-export function markRead(id) { return db.prepare('UPDATE alerts SET read = 1 WHERE id = ?').run(id).changes; }
-export function markAllRead(channelId: string) { return db.prepare('UPDATE alerts SET read = 1 WHERE channel_id = ?').run(channelId).changes; }
+export function markRead(id) {
+  return db.prepare('UPDATE alerts SET read = 1 WHERE id = ?').run(id).changes;
+}
+export function markAllRead(channelId: string) {
+  return db.prepare('UPDATE alerts SET read = 1 WHERE channel_id = ?').run(channelId).changes;
+}
 
 /** Public report card for any synced channel. */
 export function reportCard(id) {
   const m = channelMetrics(id, 30);
   const hist = channelHistory(id, 365);
   const grades = [];
-  const g = (name, value, bands, detail) => { let grade = 'C'; if (value >= bands[0]) grade = 'A'; else if (value >= bands[1]) grade = 'B'; grades.push({ name, grade, value, detail }); };
+  const g = (name, value, bands, detail) => {
+    let grade = 'C';
+    if (value >= bands[0]) grade = 'A';
+    else if (value >= bands[1]) grade = 'B';
+    grades.push({ name, grade, value, detail });
+  };
   g('Upload consistency (uploads/week, 30d)', m.uploadsPerWeek, [2, 0.75], `${m.uploadsLastN} uploads in 30 days`);
   g('Views per video vs subscribers', m.subscribers ? m.medianViewsLong / m.subscribers : 0, [0.3, 0.1], `median long-form views ÷ subscribers`);
   g('Engagement rate', m.engagement, [0.04, 0.015], 'likes+comments ÷ views (recent 50)');
-  return { ...m, grades, history: hist, generated: new Date().toISOString(), disclaimer: 'Public counts only; YouTube rounds subscriber counts, so small daily deltas are noisy.' };
+  return {
+    ...m,
+    grades,
+    history: hist,
+    generated: new Date().toISOString(),
+    disclaimer: 'Public counts only; YouTube rounds subscriber counts, so small daily deltas are noisy.',
+  };
 }
 
 /** Scenario projection with explicit uncertainty, from the channel's own snapshot trend. */
@@ -116,7 +183,9 @@ export function forecast(id, { days = 90 }: { days?: number } = {}) {
   const scen = (rate, mult) => Math.round(rate * mult * days);
   const last = hist[n - 1];
   return {
-    available: true, basedOnDays: n, horizonDays: days,
+    available: true,
+    basedOnDays: n,
+    horizonDays: days,
     scenarios: {
       low: { subs: last.subs + scen(Math.min(dailySubs, rSubs), 0.6), views: last.views + scen(Math.min(dailyViews, rViews), 0.6) },
       base: { subs: last.subs + scen((dailySubs + rSubs) / 2, 1), views: last.views + scen((dailyViews + rViews) / 2, 1) },

@@ -27,7 +27,8 @@ test('spearman, normal cdf', () => {
 test('composite renormalises over the axes that could be scored', () => {
   const w = R.defaultWeights();
   const full = R.composite({ demand: 50, patternFit: 50, freshness: 50, titleCraft: 50, curiosity: 50, emotion: 50, thumbnail: 50, hook: 50 }, w);
-  assert.equal(Math.round(full.score), 50); assert.ok(Math.abs(full.coverage - 1) < 1e-9);
+  assert.equal(Math.round(full.score), 50);
+  assert.ok(Math.abs(full.coverage - 1) < 1e-9);
   const part = R.composite({ titleCraft: 80, patternFit: 60 }, w);
   assert.ok(Math.abs(part.score - (0.1 * 80 + 0.2 * 60) / 0.3) < 1e-9);
   assert.ok(Math.abs(part.coverage - 0.3) < 1e-9);
@@ -35,7 +36,9 @@ test('composite renormalises over the axes that could be scored', () => {
 });
 
 test('prediction is monotonic, has a range, and a breakout probability', () => {
-  const lo = R.predict(20), mid = R.predict(50), hi = R.predict(90);
+  const lo = R.predict(20),
+    mid = R.predict(50),
+    hi = R.predict(90);
   assert.ok(lo.multiplier < mid.multiplier && mid.multiplier < hi.multiplier);
   assert.equal(mid.multiplier, 1);
   assert.ok(hi.range80[0] < hi.multiplier && hi.multiplier < hi.range80[1]);
@@ -47,9 +50,12 @@ test('prediction is monotonic, has a range, and a breakout probability', () => {
 
 // Synthetic history: curiosity drives outcomes, titleCraft is noise-inverse, freshness is pure noise.
 function synth(n, seed = 7) {
-  let s = seed; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  let s = seed;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
   return Array.from({ length: n }, (_, i) => {
-    const curiosity = Math.round(rnd() * 100), titleCraft = Math.round(rnd() * 100), freshness = Math.round(rnd() * 100);
+    const curiosity = Math.round(rnd() * 100),
+      titleCraft = Math.round(rnd() * 100),
+      freshness = Math.round(rnd() * 100);
     const y = (curiosity - 50) / 25 - (titleCraft - 50) / 200 + (rnd() - 0.5) * 0.8;
     return { id: 'v' + i, ts: i * 86400000, y, axes: { curiosity, titleCraft, freshness } };
   });
@@ -63,7 +69,8 @@ test('fitModel learns which axes predict outcomes, keeps live-only axes at prior
   assert.ok(m.weights.curiosity > prior.curiosity, 'data raises the predictive axis');
   assert.ok(m.weights.titleCraft < prior.titleCraft, 'data lowers the non-predictive axis');
   assert.ok(Math.abs(Object.values(m.weights).reduce((a, b) => a + b, 0) - 1) < 1e-3, 'weights sum to 1');
-  assert.equal(m.axes.demand.rho, null); assert.equal(m.axes.hook.rho, null);
+  assert.equal(m.axes.demand.rho, null);
+  assert.equal(m.axes.hook.rho, null);
   assert.ok(Math.abs(m.weights.demand / m.weights.hook - prior.demand / prior.hook) < 0.05, 'live-only axes keep their prior ratio');
   assert.ok(m.map.fitted && m.map.beta > 0 && m.map.sigma >= 0.35);
   // Fewer rows → closer to the priors (shrinkage).
@@ -75,7 +82,8 @@ test('fitModel with no signal falls back to priors and never inverts the map', (
   const rows = synth(60).map(r => ({ ...r, y: -(r.axes.curiosity - 50) / 25, axes: { curiosity: r.axes.curiosity } }));
   const m = R.fitModel(rows);
   assert.ok(m.noSignal);
-  assert.equal(m.map.beta, 0); assert.ok(m.map.slopeWasNegative);
+  assert.equal(m.map.beta, 0);
+  assert.ok(m.map.slopeWasNegative);
 });
 
 test('holdout grades on newer videos only', () => {
@@ -87,12 +95,25 @@ test('holdout grades on newer videos only', () => {
 });
 
 test('launch-curve interpolation and status classification', () => {
-  const pts = [{ age: 10, views: 100 }, { age: 20, views: 200 }];
+  const pts = [
+    { age: 10, views: 100 },
+    { age: 20, views: 200 },
+  ];
   assert.equal(R.interpAt(pts, 15), 150);
   assert.equal(R.interpAt(pts, 5), 50, '(0,0) is implied');
   assert.equal(R.interpAt(pts, 25), null, 'no extrapolation');
   assert.equal(R.interpAt([{ age: 200, views: 900 }], 10), null, 'first reading too late to trust early ages');
-  assert.equal(R.interpAt([{ age: 10, views: 10 }, { age: 100, views: 90 }], 50), null, 'gap too wide');
+  assert.equal(
+    R.interpAt(
+      [
+        { age: 10, views: 10 },
+        { age: 100, views: 90 },
+      ],
+      50
+    ),
+    null,
+    'gap too wide'
+  );
   assert.equal(R.classify(3, 1, 'high'), 'warming-up');
   assert.equal(R.classify(2.1, 5, 'high'), 'breakout');
   assert.equal(R.classify(2.1, 5, 'low'), 'rising', 'estimated baselines need 1.5× the threshold');

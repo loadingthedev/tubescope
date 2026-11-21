@@ -6,10 +6,28 @@ import { fetchVideosByIds, fetchChannelsByIds, hydrateVideo } from './channels.t
 import { median, mean, daysSince, clamp } from './stats.ts';
 
 const QUESTION_PREFIXES = ['how', 'what', 'why', 'when', 'where', 'which', 'can', 'is', 'does', 'should', 'do', 'will', 'are'];
-const MODIFIERS = ['for beginners', 'tutorial', 'explained', 'vs', 'review', 'tips', 'mistakes', 'best', '2026', 'step by step', 'in 10 minutes', 'cheap', 'free', 'without'];
+const MODIFIERS = [
+  'for beginners',
+  'tutorial',
+  'explained',
+  'vs',
+  'review',
+  'tips',
+  'mistakes',
+  'best',
+  '2026',
+  'step by step',
+  'in 10 minutes',
+  'cheap',
+  'free',
+  'without',
+];
 
 /** Keyword explorer: autocomplete tree (free) → long-tail + question variants. */
-export async function keywordExplore(seed: string, { country = 'US', lang = 'en', deep = true }: { country?: string; lang?: string; deep?: boolean } = {}): Promise<KeywordExploreResponse> {
+export async function keywordExplore(
+  seed: string,
+  { country = 'US', lang = 'en', deep = true }: { country?: string; lang?: string; deep?: boolean } = {}
+): Promise<KeywordExploreResponse> {
   const base = await suggest(seed, { country, lang });
   const letters = deep ? 'abcdefghijklmnopqrstuvwxyz'.split('') : [];
   const tasks = [];
@@ -17,7 +35,12 @@ export async function keywordExplore(seed: string, { country = 'US', lang = 'en'
   for (const q of QUESTION_PREFIXES) tasks.push(suggest(`${q} ${seed}`, { country, lang }));
   const results = await Promise.all(tasks);
   const seen = new Map();
-  const add = (list, source) => { for (const s of list) { const k = s.toLowerCase().trim(); if (k && k !== seed.toLowerCase()) seen.set(k, source); } };
+  const add = (list, source) => {
+    for (const s of list) {
+      const k = s.toLowerCase().trim();
+      if (k && k !== seed.toLowerCase()) seen.set(k, source);
+    }
+  };
   add(base, 'autocomplete');
   results.slice(0, letters.length).forEach(r => add(r, 'alphabet'));
   results.slice(letters.length).forEach(r => add(r, 'question'));
@@ -25,12 +48,29 @@ export async function keywordExplore(seed: string, { country = 'US', lang = 'en'
   const questions = all.filter(k => QUESTION_PREFIXES.some(q => k.keyword.startsWith(q + ' ')));
   const longTail = all.filter(k => k.words >= 4 && !questions.includes(k));
   const modifiers = MODIFIERS.map(m => `${seed} ${m}`);
-  return { seed, country, total: all.length, autocomplete: base, longTail, questions, modifiers, all, source: 'YouTube autocomplete (public suggest endpoint); no API quota used' };
+  return {
+    seed,
+    country,
+    total: all.length,
+    autocomplete: base,
+    longTail,
+    questions,
+    modifiers,
+    all,
+    source: 'YouTube autocomplete (public suggest endpoint); no API quota used',
+  };
 }
 
 /** Competition evidence for a keyword using a real search.list sample. ~102 quota units, cached 24h. */
-export async function keywordCompetition(keyword: string, { country = 'US', lang = 'en', sample = 25 }: { country?: string; lang?: string; sample?: number } = {}): Promise<KeywordCompetitionResponse> {
-  const sr = await ytGet('search.list', { part: 'snippet', q: keyword, type: 'video', regionCode: country, relevanceLanguage: lang, maxResults: sample }, { ttl: DEFAULT_TTL.search });
+export async function keywordCompetition(
+  keyword: string,
+  { country = 'US', lang = 'en', sample = 25 }: { country?: string; lang?: string; sample?: number } = {}
+): Promise<KeywordCompetitionResponse> {
+  const sr = await ytGet(
+    'search.list',
+    { part: 'snippet', q: keyword, type: 'video', regionCode: country, relevanceLanguage: lang, maxResults: sample },
+    { ttl: DEFAULT_TTL.search }
+  );
   const ids = (sr.items || []).map(i => i.id.videoId).filter(Boolean);
   const videos = await fetchVideosByIds(ids);
   const chIds = [...new Set(videos.map(v => v.channel_id))];
@@ -53,19 +93,30 @@ export async function keywordCompetition(keyword: string, { country = 'US', lang
   const totalResults = sr.pageInfo?.totalResults ?? null;
   // Transparent scoring (0-100, higher = easier to rank / more opportunity). Each component is shown to the user.
   const components = {
-    smallChannelsRanking: Math.round(smallChannelShare * 100),      // small channels already rank → you can too
-    freshContentRanking: Math.round(recentShare * 100),             // search rewards new uploads here
-    titleGap: Math.round((1 - exactShare) * 100),                   // few exact-title matches → gap
+    smallChannelsRanking: Math.round(smallChannelShare * 100), // small channels already rank → you can too
+    freshContentRanking: Math.round(recentShare * 100), // search rewards new uploads here
+    titleGap: Math.round((1 - exactShare) * 100), // few exact-title matches → gap
     demandProxy: Math.round(clamp(Math.log10(Math.max(1, medViews)) / 7, 0, 1) * 100), // median views of ranking videos
   };
-  const score = Math.round(0.35 * components.smallChannelsRanking + 0.2 * components.freshContentRanking + 0.15 * components.titleGap + 0.3 * components.demandProxy);
-  db.prepare(`INSERT INTO keyword_history (keyword, country, day, suggestion_count, top_video_median_views, avg_channel_subs, recent_upload_share, score)
-    VALUES (?, ?, ?, NULL, ?, ?, ?, ?) ON CONFLICT(keyword, country, day) DO UPDATE SET top_video_median_views=excluded.top_video_median_views, avg_channel_subs=excluded.avg_channel_subs, recent_upload_share=excluded.recent_upload_share, score=excluded.score`)
-    .run(keyword, country, today(), medViews, Math.round(mean(rows.map(r => r.channel_subs).filter(x => x !== null))), recentShare, score);
+  const score = Math.round(
+    0.35 * components.smallChannelsRanking + 0.2 * components.freshContentRanking + 0.15 * components.titleGap + 0.3 * components.demandProxy
+  );
+  db.prepare(
+    `INSERT INTO keyword_history (keyword, country, day, suggestion_count, top_video_median_views, avg_channel_subs, recent_upload_share, score)
+    VALUES (?, ?, ?, NULL, ?, ?, ?, ?) ON CONFLICT(keyword, country, day) DO UPDATE SET top_video_median_views=excluded.top_video_median_views, avg_channel_subs=excluded.avg_channel_subs, recent_upload_share=excluded.recent_upload_share, score=excluded.score`
+  ).run(keyword, country, today(), medViews, Math.round(mean(rows.map(r => r.channel_subs).filter(x => x !== null))), recentShare, score);
   return {
-    keyword, country, sampleSize: rows.length, totalResultsReported: totalResults,
-    medianViews: medViews, medianChannelSubs: medSubs, recentShare, exactTitleShare: exactShare, smallChannelShare,
-    opportunityScore: score, components,
+    keyword,
+    country,
+    sampleSize: rows.length,
+    totalResultsReported: totalResults,
+    medianViews: medViews,
+    medianChannelSubs: medSubs,
+    recentShare,
+    exactTitleShare: exactShare,
+    smallChannelShare,
+    opportunityScore: score,
+    components,
     formula: '0.35×small-channels-ranking + 0.20×fresh-content-ranking + 0.15×title-gap + 0.30×demand-proxy (log10 median views of the top results ÷ 7)',
     results: rows.sort((a, b) => b.view_count - a.view_count),
     source: `search.list top ${sample} for "${keyword}" in ${country} + videos.list + channels.list`,
@@ -78,10 +129,21 @@ export async function risingSuggestions(seed: string, { country = 'US' }: { coun
   const key = `rising:${country}:${seed.toLowerCase()}`;
   const prev = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   const prevList = prev ? JSON.parse(prev.value) : null;
-  db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify({ day: today(), list: current }));
+  db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(
+    key,
+    JSON.stringify({ day: today(), list: current })
+  );
   const newOnes = prevList ? current.filter(c => !prevList.list.includes(c)) : [];
   const gone = prevList ? prevList.list.filter(c => !current.includes(c)) : [];
-  return { seed, country, current, comparedTo: prevList?.day || null, newSuggestions: newOnes, droppedSuggestions: gone, note: 'Autocomplete positions reflect current search interest; new entries since your last check are the best "rising" evidence available for free.' };
+  return {
+    seed,
+    country,
+    current,
+    comparedTo: prevList?.day || null,
+    newSuggestions: newOnes,
+    droppedSuggestions: gone,
+    note: 'Autocomplete positions reflect current search interest; new entries since your last check are the best "rising" evidence available for free.',
+  };
 }
 
 export function keywordHistory(keyword: string, country: string = 'US') {
@@ -101,25 +163,61 @@ export function scoreOutliers(videos, { byChannel = true }: { byChannel?: boolea
     const medVpd = median(list.map(v => v.view_count / Math.max(1, daysSince(v.published_at)))) || 1;
     for (const v of list) {
       const vpd = v.view_count / Math.max(1, daysSince(v.published_at));
-      out.push({ ...v, baseline_median: med, outlier_x: v.view_count / med, velocity_x: vpd / medVpd, vpd, sample: list.length, subs_ratio: v.channel_subs ? v.view_count / v.channel_subs : null });
+      out.push({
+        ...v,
+        baseline_median: med,
+        outlier_x: v.view_count / med,
+        velocity_x: vpd / medVpd,
+        vpd,
+        sample: list.length,
+        subs_ratio: v.channel_subs ? v.view_count / v.channel_subs : null,
+      });
     }
   }
   return out.sort((a, b) => b.outlier_x - a.outlier_x);
 }
 
 /** Outliers across owned + competitor channels already synced locally (no quota). */
-export function localOutliers(channelIds, { format = 'long', minX = 2, days = 365, limit = 100 }: { format?: string; minX?: number; days?: number; limit?: number } = {}) {
+export function localOutliers(
+  channelIds,
+  { format = 'long', minX = 2, days = 365, limit = 100 }: { format?: string; minX?: number; days?: number; limit?: number } = {}
+) {
   const ph = channelIds.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT v.*, c.title AS channel_title, c.subscriber_count AS channel_subs FROM videos v JOIN channels c ON c.id = v.channel_id
-    WHERE v.channel_id IN (${ph}) AND v.is_live = 0 AND v.published_at >= date('now', ?)`).all(...channelIds, `-${days} days`).map(hydrateVideo);
-  const filtered = rows.filter(v => format === 'all' ? true : format === 'shorts' ? v.is_short : !v.is_short);
-  return scoreOutliers(filtered).filter(v => v.outlier_x >= minX).slice(0, limit);
+  const rows = db
+    .prepare(
+      `SELECT v.*, c.title AS channel_title, c.subscriber_count AS channel_subs FROM videos v JOIN channels c ON c.id = v.channel_id
+    WHERE v.channel_id IN (${ph}) AND v.is_live = 0 AND v.published_at >= date('now', ?)`
+    )
+    .all(...channelIds, `-${days} days`)
+    .map(hydrateVideo);
+  const filtered = rows.filter(v => (format === 'all' ? true : format === 'shorts' ? v.is_short : !v.is_short));
+  return scoreOutliers(filtered)
+    .filter(v => v.outlier_x >= minX)
+    .slice(0, limit);
 }
 
 /** Search-driven outliers: find videos matching a topic published recently and rank by view/subscriber ratio and velocity. */
-export async function searchOutliers(query: string, { country = 'US', publishedWithinDays = 90, maxSubscribers = null, format = 'all', order = 'viewCount', sample = 50 }: { country?: string; publishedWithinDays?: number; maxSubscribers?: number; format?: string; order?: string; sample?: number } = {}) {
+export async function searchOutliers(
+  query: string,
+  {
+    country = 'US',
+    publishedWithinDays = 90,
+    maxSubscribers = null,
+    format = 'all',
+    order = 'viewCount',
+    sample = 50,
+  }: { country?: string; publishedWithinDays?: number; maxSubscribers?: number; format?: string; order?: string; sample?: number } = {}
+) {
   const publishedAfter = new Date(Date.now() - publishedWithinDays * 86400000).toISOString();
-  const params: Record<string, string | number> = { part: 'snippet', q: query, type: 'video', regionCode: country, order, publishedAfter, maxResults: Math.min(50, sample) };
+  const params: Record<string, string | number> = {
+    part: 'snippet',
+    q: query,
+    type: 'video',
+    regionCode: country,
+    order,
+    publishedAfter,
+    maxResults: Math.min(50, sample),
+  };
   if (format === 'shorts') params.videoDuration = 'short';
   if (format === 'long') params.videoDuration = 'medium';
   const sr = await ytGet('search.list', params, { ttl: DEFAULT_TTL.search });
@@ -127,24 +225,58 @@ export async function searchOutliers(query: string, { country = 'US', publishedW
   const videos = await fetchVideosByIds(ids);
   const channels = await fetchChannelsByIds([...new Set(videos.map(v => v.channel_id))]);
   const chMap = Object.fromEntries(channels.map(c => [c.id, c]));
-  let rows = videos.map(v => ({ ...v, channel_subs: chMap[v.channel_id]?.subscriber_count || 0, channel_videos: chMap[v.channel_id]?.video_count || 0, channel_thumbnail: chMap[v.channel_id]?.thumbnail }));
+  let rows = videos.map(v => ({
+    ...v,
+    channel_subs: chMap[v.channel_id]?.subscriber_count || 0,
+    channel_videos: chMap[v.channel_id]?.video_count || 0,
+    channel_thumbnail: chMap[v.channel_id]?.thumbnail,
+  }));
   if (format === 'shorts') rows = rows.filter(v => v.is_short);
   if (format === 'long') rows = rows.filter(v => !v.is_short);
   if (maxSubscribers) rows = rows.filter(v => v.channel_subs <= maxSubscribers);
   rows = rows.map(v => {
     const age = Math.max(1, daysSince(v.published_at));
     const subsRatio = v.view_count / Math.max(100, v.channel_subs);
-    return { ...v, age_days: Math.round(age), vpd: v.view_count / age, subs_ratio: subsRatio, breakout_score: Math.round(Math.log10(1 + subsRatio) * 40 + Math.log10(1 + v.view_count / age) * 10) };
+    return {
+      ...v,
+      age_days: Math.round(age),
+      vpd: v.view_count / age,
+      subs_ratio: subsRatio,
+      breakout_score: Math.round(Math.log10(1 + subsRatio) * 40 + Math.log10(1 + v.view_count / age) * 10),
+    };
   });
-  return { query, sampleSize: rows.length, results: rows.sort((a, b) => b.breakout_score - a.breakout_score), source: 'search.list sample ranked by views ÷ channel subscribers (breakout) and views per day (velocity)' };
+  return {
+    query,
+    sampleSize: rows.length,
+    results: rows.sort((a, b) => b.breakout_score - a.breakout_score),
+    source: 'search.list sample ranked by views ÷ channel subscribers (breakout) and views per day (velocity)',
+  };
 }
 
 export async function trending({ country = 'US', categoryId = '', limit = 50 }: { country?: string; categoryId?: string; limit?: number } = {}) {
-  const res = await ytGet('videos.list', { part: 'snippet,statistics,contentDetails', chart: 'mostPopular', regionCode: country, videoCategoryId: categoryId || undefined, maxResults: Math.min(50, limit) }, { ttl: DEFAULT_TTL.trending });
+  const res = await ytGet(
+    'videos.list',
+    {
+      part: 'snippet,statistics,contentDetails',
+      chart: 'mostPopular',
+      regionCode: country,
+      videoCategoryId: categoryId || undefined,
+      maxResults: Math.min(50, limit),
+    },
+    { ttl: DEFAULT_TTL.trending }
+  );
   return (res.items || []).map(v => ({
-    id: v.id, title: v.snippet.title, channel_id: v.snippet.channelId, channel_title: v.snippet.channelTitle, published_at: v.snippet.publishedAt,
-    thumbnail: v.snippet.thumbnails?.high?.url || v.snippet.thumbnails?.medium?.url, view_count: Number(v.statistics?.viewCount || 0), like_count: Number(v.statistics?.likeCount || 0),
-    comment_count: Number(v.statistics?.commentCount || 0), category_id: v.snippet.categoryId, duration: v.contentDetails?.duration,
+    id: v.id,
+    title: v.snippet.title,
+    channel_id: v.snippet.channelId,
+    channel_title: v.snippet.channelTitle,
+    published_at: v.snippet.publishedAt,
+    thumbnail: v.snippet.thumbnails?.high?.url || v.snippet.thumbnails?.medium?.url,
+    view_count: Number(v.statistics?.viewCount || 0),
+    like_count: Number(v.statistics?.likeCount || 0),
+    comment_count: Number(v.statistics?.commentCount || 0),
+    category_id: v.snippet.categoryId,
+    duration: v.contentDetails?.duration,
   }));
 }
 
@@ -155,35 +287,131 @@ export async function categories(country: string = 'US') {
 
 /** Niche explorer: find channels for a topic and size them. */
 export async function nicheChannels(query: string, { country = 'US', sample = 25 }: { country?: string; sample?: number } = {}) {
-  const sr = await ytGet('search.list', { part: 'snippet', q: query, type: 'channel', regionCode: country, maxResults: Math.min(50, sample) }, { ttl: DEFAULT_TTL.search });
+  const sr = await ytGet(
+    'search.list',
+    { part: 'snippet', q: query, type: 'channel', regionCode: country, maxResults: Math.min(50, sample) },
+    { ttl: DEFAULT_TTL.search }
+  );
   const ids = (sr.items || []).map(i => i.id.channelId).filter(Boolean);
   const channels = await fetchChannelsByIds(ids);
-  return channels.map(c => ({ ...c, views_per_video: c.video_count ? c.view_count / c.video_count : 0, age_days: Math.round(daysSince(c.published_at)) })).sort((a, b) => b.subscriber_count - a.subscriber_count);
+  return channels
+    .map(c => ({ ...c, views_per_video: c.video_count ? c.view_count / c.video_count : 0, age_days: Math.round(daysSince(c.published_at)) }))
+    .sort((a, b) => b.subscriber_count - a.subscriber_count);
 }
 
 /** Channels like this one: take the channel's best-performing titles, search them, and rank the channels that keep showing up. */
-export async function similarChannels(channelId: string, { country = 'US', limit = 25, queries = 3 }: { country?: string; limit?: number; queries?: number } = {}) {
+export async function similarChannels(
+  channelId: string,
+  { country = 'US', limit = 25, queries = 3 }: { country?: string; limit?: number; queries?: number } = {}
+) {
   const me = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) || (await fetchChannelsByIds([channelId]))[0];
   if (!me) throw new Error('channel not found');
   const top = db.prepare('SELECT title, view_count FROM videos WHERE channel_id = ? ORDER BY view_count DESC LIMIT 12').all(channelId);
-  const stop = new Set(['this', 'that', 'with', 'from', 'your', 'what', 'when', 'into', 'about', 'they', 'them', 'have', 'will', 'just', 'like', 'make', 'made', 'most', 'more', 'than', 'then', 'over', 'after', 'before', 'these', 'those', 'their', 'there', 'here', 'every', 'should', 'could', 'would', 'shorts', 'video']);
+  const stop = new Set([
+    'this',
+    'that',
+    'with',
+    'from',
+    'your',
+    'what',
+    'when',
+    'into',
+    'about',
+    'they',
+    'them',
+    'have',
+    'will',
+    'just',
+    'like',
+    'make',
+    'made',
+    'most',
+    'more',
+    'than',
+    'then',
+    'over',
+    'after',
+    'before',
+    'these',
+    'those',
+    'their',
+    'there',
+    'here',
+    'every',
+    'should',
+    'could',
+    'would',
+    'shorts',
+    'video',
+  ]);
   const freq: Record<string, number> = {};
-  for (const t of top) for (const w of t.title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)) if (w.length > 3 && !stop.has(w)) freq[w] = (freq[w] || 0) + 1 + Math.log10(1 + (t.view_count || 0)) / 4;
-  const terms = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(([w]) => w);
-  const qs = []; for (let i = 0; i < queries && terms.length; i++) qs.push(terms.slice(i * 2, i * 2 + 3).join(' ') || terms[0]);
+  for (const t of top)
+    for (const w of t.title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/))
+      if (w.length > 3 && !stop.has(w)) freq[w] = (freq[w] || 0) + 1 + Math.log10(1 + (t.view_count || 0)) / 4;
+  const terms = Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .map(([w]) => w);
+  const qs = [];
+  for (let i = 0; i < queries && terms.length; i++) qs.push(terms.slice(i * 2, i * 2 + 3).join(' ') || terms[0]);
   if (!qs.length) qs.push(me.title);
   const agg: Record<string, { hits: number; queries: Set<string>; sample: string[] }> = {};
   for (const q of qs) {
-    const sr = await ytGet('search.list', { part: 'snippet', q, type: 'video', regionCode: country, order: 'relevance', publishedAfter: new Date(Date.now() - 365 * 86400000).toISOString(), maxResults: 50 }, { ttl: DEFAULT_TTL.search });
-    for (const it of sr.items || []) { const cid = it.snippet?.channelId; if (!cid || cid === channelId) continue; const a = agg[cid] ||= { hits: 0, queries: new Set(), sample: [] }; a.hits++; a.queries.add(q); if (a.sample.length < 3) a.sample.push(it.snippet.title); }
+    const sr = await ytGet(
+      'search.list',
+      {
+        part: 'snippet',
+        q,
+        type: 'video',
+        regionCode: country,
+        order: 'relevance',
+        publishedAfter: new Date(Date.now() - 365 * 86400000).toISOString(),
+        maxResults: 50,
+      },
+      { ttl: DEFAULT_TTL.search }
+    );
+    for (const it of sr.items || []) {
+      const cid = it.snippet?.channelId;
+      if (!cid || cid === channelId) continue;
+      const a = (agg[cid] ||= { hits: 0, queries: new Set(), sample: [] });
+      a.hits++;
+      a.queries.add(q);
+      if (a.sample.length < 3) a.sample.push(it.snippet.title);
+    }
   }
-  const ids = Object.entries(agg).sort((a, b) => b[1].hits - a[1].hits).slice(0, 50).map(([id]) => id);
+  const ids = Object.entries(agg)
+    .sort((a, b) => b[1].hits - a[1].hits)
+    .slice(0, 50)
+    .map(([id]) => id);
   const channels = await fetchChannelsByIds(ids);
-  const tracked = new Set(db.prepare('SELECT competitor_channel_id FROM competitor_links WHERE owned_channel_id = ?').all(channelId).map(r => r.competitor_channel_id));
+  const tracked = new Set(
+    db
+      .prepare('SELECT competitor_channel_id FROM competitor_links WHERE owned_channel_id = ?')
+      .all(channelId)
+      .map(r => r.competitor_channel_id)
+  );
   const mySubs = me.subscriber_count || 1;
   return {
     basedOn: { channel: me.title, queries: qs },
-    results: channels.map(c => { const a = agg[c.id]; const sizeFit = 1 - Math.min(1, Math.abs(Math.log10((c.subscriber_count || 1) / mySubs)) / 2); return { ...c, hits: a.hits, matchedQueries: [...a.queries], sampleTitles: a.sample, tracked: tracked.has(c.id), views_per_video: c.video_count ? Math.round(c.view_count / c.video_count) : 0, sizeFit: +sizeFit.toFixed(2), score: Math.round(a.hits * 10 * (0.5 + sizeFit)) }; }).sort((a, b) => b.score - a.score).slice(0, limit),
+    results: channels
+      .map(c => {
+        const a = agg[c.id];
+        const sizeFit = 1 - Math.min(1, Math.abs(Math.log10((c.subscriber_count || 1) / mySubs)) / 2);
+        return {
+          ...c,
+          hits: a.hits,
+          matchedQueries: [...a.queries],
+          sampleTitles: a.sample,
+          tracked: tracked.has(c.id),
+          views_per_video: c.video_count ? Math.round(c.view_count / c.video_count) : 0,
+          sizeFit: +sizeFit.toFixed(2),
+          score: Math.round(a.hits * 10 * (0.5 + sizeFit)),
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit),
   };
 }
 
@@ -191,7 +419,12 @@ export async function similarChannels(channelId: string, { country = 'US', limit
 export async function similarVideos(videoId: string, { country = 'US' }: { country?: string } = {}) {
   const v = db.prepare('SELECT * FROM videos WHERE id = ?').get(videoId) || (await fetchVideosByIds([videoId]))[0];
   if (!v) return { results: [] };
-  const q = v.title.replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 3).slice(0, 6).join(' ');
+  const q = v.title
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 6)
+    .join(' ');
   const out = await searchOutliers(q, { country, publishedWithinDays: 3650, sample: 25 });
   return { basedOn: v.title, query: q, results: out.results.filter(r => r.id !== videoId) };
 }
@@ -201,18 +434,18 @@ export function titlePatterns(titles) {
   const patterns = {
     'Number list ("7 ...")': /^\d+\s/,
     'How to': /^how (to|i|we)\b/i,
-    'Question': /\?\s*$|^(why|what|how|when|is|are|do|does|can|should)\b/i,
+    Question: /\?\s*$|^(why|what|how|when|is|are|do|does|can|should)\b/i,
     'Versus / comparison': /\bvs\.?\b|\bversus\b|\bor\b.*\?/i,
     'I tried / I tested': /^i (tried|tested|spent|built|made|lived|quit|bought)/i,
     'Negative / warning': /\b(never|stop|don't|mistake|worst|avoid|wrong|lie|scam)\b/i,
-    'Superlative': /\b(best|ultimate|only|biggest|most|fastest|easiest|cheapest)\b/i,
+    Superlative: /\b(best|ultimate|only|biggest|most|fastest|easiest|cheapest)\b/i,
     'Time-bound': /\b(\d+\s?(days?|hours?|minutes?|weeks?|years?))\b/i,
     'Parenthetical / bracket': /[\(\[].*[\)\]]/,
     'Colon split': /:/,
     'All-caps emphasis word': /\b[A-Z]{3,}\b/,
     'Secret / hidden / nobody': /\b(secret|hidden|nobody|no one|truth|exposed|revealed)\b/i,
     'Money amount': /\$\s?\d/,
-    'Year': /\b20\d\d\b/,
+    Year: /\b20\d\d\b/,
   };
   const counts = Object.fromEntries(Object.keys(patterns).map(k => [k, 0]));
   for (const t of titles) for (const [k, re] of Object.entries(patterns)) if (re.test(t)) counts[k]++;
@@ -221,8 +454,11 @@ export function titlePatterns(titles) {
   const wordCounts = titles.map(t => t.split(/\s+/).length);
   return {
     sample: titles.length,
-    patterns: Object.entries(counts).map(([pattern, c]) => ({ pattern, count: c, share: c / n })).sort((a, b) => b.count - a.count),
-    medianLength: median(lengths), medianWords: median(wordCounts),
+    patterns: Object.entries(counts)
+      .map(([pattern, c]) => ({ pattern, count: c, share: c / n }))
+      .sort((a, b) => b.count - a.count),
+    medianLength: median(lengths),
+    medianWords: median(wordCounts),
   };
 }
 

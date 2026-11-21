@@ -6,26 +6,43 @@
 //  - Shorts moment prompts → evenly spaced windows within the allowed length, plus one invalid (too short) one
 // Anything else gets an empty JSON object.
 let input = '';
-process.stdin.on('data', d => input += d);
+process.stdin.on('data', d => (input += d));
 process.stdin.on('end', () => {
   if (process.env.FAKE_CLAUDE_DUMP) dump(input);
   if (/Write 4 alternative titles/.test(input)) {
     const cur = (/Current title: (.*)/.exec(input) || [])[1] || 'this';
-    return out({ titles: [
-      { title: `Nobody Warns You About This Medicaid Mistake`, angle: 'stakes' },
-      { title: `Why ${cur.split(' ').slice(0, 3).join(' ')} Costs Families $40K`, angle: 'outcome' },
-      { title: `Stop: Check This Before You Apply`, angle: 'warning' },
-      { title: cur, angle: 'duplicate of current — must be dropped' },
-    ], thumbText: 'DON\'T SIGN YET' });
+    return out({
+      titles: [
+        { title: `Nobody Warns You About This Medicaid Mistake`, angle: 'stakes' },
+        { title: `Why ${cur.split(' ').slice(0, 3).join(' ')} Costs Families $40K`, angle: 'outcome' },
+        { title: `Stop: Check This Before You Apply`, angle: 'warning' },
+        { title: cur, angle: 'duplicate of current — must be dropped' },
+      ],
+      thumbText: "DON'T SIGN YET",
+    });
   }
   if (/best self-contained moments to cut as vertical Shorts/.test(input)) {
     const n = Number(/Pick the (\d+) best/.exec(input)[1]);
     const [, min, max] = /\((\d+)-(\d+) seconds each/.exec(input).map(Number);
     const lines = [...input.matchAll(/^\[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\] /gm)].map(m => [Number(m[1]), Number(m[2])]);
     const total = lines.at(-1)?.[1] || 0;
-    const len = Math.min(max, min + 4), clips = [];
+    const len = Math.min(max, min + 4),
+      clips = [];
     for (let i = 0, t = 1; i < n && t + len <= total; i++, t += len + 3)
-      clips.push({ start: t, end: t + len, title: ['The Medicaid Rule That Takes the House', 'Nobody Mentions This Lookback Exception', 'One Document Saved $80,000', 'Why Gifts Count Against You', 'Write This Down Before You Sign'][i % 5], hookText: ['THEY TAKE THE HOUSE', 'NOBODY TELLS YOU', '$80,000 SAVED', 'GIFTS COUNT', 'SIGN NOTHING'][i % 5], description: 'A 5-year rule most families miss.', why: 'opens on stakes' });
+      clips.push({
+        start: t,
+        end: t + len,
+        title: [
+          'The Medicaid Rule That Takes the House',
+          'Nobody Mentions This Lookback Exception',
+          'One Document Saved $80,000',
+          'Why Gifts Count Against You',
+          'Write This Down Before You Sign',
+        ][i % 5],
+        hookText: ['THEY TAKE THE HOUSE', 'NOBODY TELLS YOU', '$80,000 SAVED', 'GIFTS COUNT', 'SIGN NOTHING'][i % 5],
+        description: 'A 5-year rule most families miss.',
+        why: 'opens on stakes',
+      });
     clips.push({ start: 0.5, end: 2, title: 'too short to keep', hookText: 'X', description: '', why: '' });
     return out({ clips });
   }
@@ -33,9 +50,36 @@ process.stdin.on('end', () => {
     const ids = [...input.matchAll(/^\[([COSAQ]\d+)\]/gm)].map(m => m[1]);
     const first = t => ids.find(i => i.startsWith(t));
     const ideas = [
-      { topic: 'Medicaid lookback traps', angle: 'Competitor breakout shows demand; nobody explains the gift exceptions.', titles: ['The 5-Year Lookback Mistake That Costs $80K', 'Medicaid Lookback: 3 Gifts That Are Safe', 'Why Nobody Warns You About the Lookback'], keyword: 'medicaid lookback', thumbText: '5 YEARS', hook: 'If your mom gave you money, Medicaid can deny her care. Here is the rule.', format: 'long', sources: [first('C'), first('O'), first('Q')].filter(Boolean) },
-      { topic: 'Assisted living tax deduction', angle: 'Search terms show viewers asking this.', titles: ['Is Assisted Living Tax Deductible?', 'The Assisted Living Deduction Families Miss', 'Stop Overpaying Taxes on Mom’s Care'], keyword: 'assisted living tax deduction', thumbText: 'DEDUCT IT', hook: 'Most families pay for care and never claim it.', format: 'long', sources: [first('S'), first('A')].filter(Boolean) },
-      { topic: 'POA in 60 seconds', angle: 'Short follow-up to your winner.', titles: ['Power of Attorney in 60 Seconds', 'The POA Form Nobody Explains', 'Sign This Before It’s Too Late'], keyword: 'power of attorney', thumbText: 'SIGN NOW', hook: 'One signature saves months in court.', format: 'short', sources: [first('O') || ids[0]].filter(Boolean) },
+      {
+        topic: 'Medicaid lookback traps',
+        angle: 'Competitor breakout shows demand; nobody explains the gift exceptions.',
+        titles: ['The 5-Year Lookback Mistake That Costs $80K', 'Medicaid Lookback: 3 Gifts That Are Safe', 'Why Nobody Warns You About the Lookback'],
+        keyword: 'medicaid lookback',
+        thumbText: '5 YEARS',
+        hook: 'If your mom gave you money, Medicaid can deny her care. Here is the rule.',
+        format: 'long',
+        sources: [first('C'), first('O'), first('Q')].filter(Boolean),
+      },
+      {
+        topic: 'Assisted living tax deduction',
+        angle: 'Search terms show viewers asking this.',
+        titles: ['Is Assisted Living Tax Deductible?', 'The Assisted Living Deduction Families Miss', 'Stop Overpaying Taxes on Mom’s Care'],
+        keyword: 'assisted living tax deduction',
+        thumbText: 'DEDUCT IT',
+        hook: 'Most families pay for care and never claim it.',
+        format: 'long',
+        sources: [first('S'), first('A')].filter(Boolean),
+      },
+      {
+        topic: 'POA in 60 seconds',
+        angle: 'Short follow-up to your winner.',
+        titles: ['Power of Attorney in 60 Seconds', 'The POA Form Nobody Explains', 'Sign This Before It’s Too Late'],
+        keyword: 'power of attorney',
+        thumbText: 'SIGN NOW',
+        hook: 'One signature saves months in court.',
+        format: 'short',
+        sources: [first('O') || ids[0]].filter(Boolean),
+      },
     ];
     return out({ ideas });
   }
@@ -47,7 +91,8 @@ process.stdin.on('end', () => {
   let m;
   while ((m = re.exec(input))) {
     const [, key, title, thumb, hook] = m;
-    let h = 0; for (const c of title) h = (h * 31 + c.charCodeAt(0)) % 997;
+    let h = 0;
+    for (const c of title) h = (h * 31 + c.charCodeAt(0)) % 997;
     const imgNo = /^image (\d+)/.exec(thumb)?.[1];
     const imgPath = imgNo ? imagePaths[Number(imgNo) - 1] || '' : '';
     items.push({
@@ -62,5 +107,9 @@ process.stdin.on('end', () => {
   }
   out(items.length ? { items, _images: imagePaths.length } : {});
 });
-function out(o) { process.stdout.write(JSON.stringify(o)); }
-function dump(t) { import('node:fs').then(fs => fs.writeFileSync(`${process.env.FAKE_CLAUDE_DUMP}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`, t)); }
+function out(o) {
+  process.stdout.write(JSON.stringify(o));
+}
+function dump(t) {
+  import('node:fs').then(fs => fs.writeFileSync(`${process.env.FAKE_CLAUDE_DUMP}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`, t));
+}

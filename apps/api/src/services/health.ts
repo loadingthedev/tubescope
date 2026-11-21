@@ -18,47 +18,153 @@ export async function check({ deep = false }: { deep?: boolean } = {}) {
   try {
     const r = Object.values(db.query(deep ? 'PRAGMA integrity_check' : 'PRAGMA quick_check').get())[0];
     const bytes = fs.statSync(backup.dbFile).size;
-    items.push(item('database', r === 'ok' ? 'ok' : 'error', 'Database', r === 'ok' ? `${(bytes / 1e6).toFixed(1)} MB, intact` : r, r === 'ok' ? null : 'Restore the latest backup (Settings → Health → Backups).'));
-  } catch (e) { items.push(item('database', 'error', 'Database', e.message, 'Restore the latest backup.')); }
+    items.push(
+      item(
+        'database',
+        r === 'ok' ? 'ok' : 'error',
+        'Database',
+        r === 'ok' ? `${(bytes / 1e6).toFixed(1)} MB, intact` : r,
+        r === 'ok' ? null : 'Restore the latest backup (Settings → Health → Backups).'
+      )
+    );
+  } catch (e) {
+    items.push(item('database', 'error', 'Database', e.message, 'Restore the latest backup.'));
+  }
   // disk
   try {
-    const s = fs.statfsSync(DATA_DIR); const free = s.bavail * s.bsize;
-    items.push(item('disk', free < 0.5e9 ? 'error' : free < 2e9 ? 'warn' : 'ok', 'Disk space', `${(free / 1e9).toFixed(1)} GB free`, free < 2e9 ? 'Free up space: renders and Shorts need room (old renders live in data/renders).' : null));
-  } catch { /* statfs unsupported */ }
+    const s = fs.statfsSync(DATA_DIR);
+    const free = s.bavail * s.bsize;
+    items.push(
+      item(
+        'disk',
+        free < 0.5e9 ? 'error' : free < 2e9 ? 'warn' : 'ok',
+        'Disk space',
+        `${(free / 1e9).toFixed(1)} GB free`,
+        free < 2e9 ? 'Free up space: renders and Shorts need room (old renders live in data/renders).' : null
+      )
+    );
+  } catch {
+    /* statfs unsupported */
+  }
   // backups
   const b = backup.latest();
-  items.push(!b ? item('backups', 'warn', 'Backups', 'No backup yet — one is made every night.', null)
-    : item('backups', days(b.at) > 2 ? 'warn' : 'ok', 'Backups', `last ${b.file} (${(b.bytes / 1e6).toFixed(1)} MB), ${backup.list().length} kept`, days(b.at) > 2 ? 'The nightly backup has not run for 2+ days — check the job list below.' : null));
+  items.push(
+    !b
+      ? item('backups', 'warn', 'Backups', 'No backup yet — one is made every night.', null)
+      : item(
+          'backups',
+          days(b.at) > 2 ? 'warn' : 'ok',
+          'Backups',
+          `last ${b.file} (${(b.bytes / 1e6).toFixed(1)} MB), ${backup.list().length} kept`,
+          days(b.at) > 2 ? 'The nightly backup has not run for 2+ days — check the job list below.' : null
+        )
+  );
   // YouTube quota
   const q = quotaToday();
-  items.push(item('quota', q.exhausted ? 'warn' : q.units > q.limit * 0.9 ? 'warn' : 'ok', 'YouTube quota', `${q.units.toLocaleString()} / ${q.limit.toLocaleString()} units today${q.exhausted ? ' — used up' : ''}; resets in ${Math.ceil(q.resetsInMinutes / 60)} h`, q.exhausted ? 'Scheduled work waits for the reset automatically. If this happens often, lower sync depths or request more quota from Google.' : null));
+  items.push(
+    item(
+      'quota',
+      q.exhausted ? 'warn' : q.units > q.limit * 0.9 ? 'warn' : 'ok',
+      'YouTube quota',
+      `${q.units.toLocaleString()} / ${q.limit.toLocaleString()} units today${q.exhausted ? ' — used up' : ''}; resets in ${Math.ceil(q.resetsInMinutes / 60)} h`,
+      q.exhausted ? 'Scheduled work waits for the reset automatically. If this happens often, lower sync depths or request more quota from Google.' : null
+    )
+  );
   // YouTube sign-ins
   if (getSetting('yt_api_key', '')) items.push(item('api_key', 'ok', 'YouTube API key', 'set'));
   else items.push(item('api_key', 'error', 'YouTube API key', 'missing', 'Ask your AI to "set up Tubescope", or paste a key in Settings.'));
   for (const ch of db.prepare("SELECT id, title, oauth_json FROM channels WHERE kind = 'owned'").all()) {
     const broken = getSetting(`oauth_broken_${ch.id}`, '');
-    if (!ch.oauth_json) { items.push(item(`signin_${ch.id}`, 'warn', `${ch.title}: Google sign-in`, 'not connected — analytics and CTR are off for this channel', 'Channels → Connect with Google.')); continue; }
+    if (!ch.oauth_json) {
+      items.push(
+        item(
+          `signin_${ch.id}`,
+          'warn',
+          `${ch.title}: Google sign-in`,
+          'not connected — analytics and CTR are off for this channel',
+          'Channels → Connect with Google.'
+        )
+      );
+      continue;
+    }
     if (broken) {
       const info = JSON.parse(broken);
       const testing = info.ageDays >= 6 && info.ageDays <= 8;
-      items.push(item(`signin_${ch.id}`, 'error', `${ch.title}: Google sign-in`, `expired or revoked ${new Date(info.at).toLocaleString()}`, `Reconnect it (Channels → Connect with Google).${testing ? ' It lasted ~7 days: publish the Google Cloud OAuth app (Google Auth Platform → Audience → Publish app) so it stops expiring.' : ''}`));
+      items.push(
+        item(
+          `signin_${ch.id}`,
+          'error',
+          `${ch.title}: Google sign-in`,
+          `expired or revoked ${new Date(info.at).toLocaleString()}`,
+          `Reconnect it (Channels → Connect with Google).${testing ? ' It lasted ~7 days: publish the Google Cloud OAuth app (Google Auth Platform → Audience → Publish app) so it stops expiring.' : ''}`
+        )
+      );
     } else items.push(item(`signin_${ch.id}`, 'ok', `${ch.title}: Google sign-in`, 'working'));
   }
   // scheduled jobs
   for (const j of jobs.status()) {
-    if (j.failuresInARow >= 2 && !/^busy/.test(j.lastError || '')) items.push(item(`job_${j.name}`, 'warn', `Job: ${j.label}`, `failed ${j.failuresInARow}× in a row — ${j.lastError}`, /quota/i.test(j.lastError || '') ? 'Waits for the quota reset automatically.' : 'It retries automatically; the error above says what it needs.'));
+    if (j.failuresInARow >= 2 && !/^busy/.test(j.lastError || ''))
+      items.push(
+        item(
+          `job_${j.name}`,
+          'warn',
+          `Job: ${j.label}`,
+          `failed ${j.failuresInARow}× in a row — ${j.lastError}`,
+          /quota/i.test(j.lastError || '') ? 'Waits for the quota reset automatically.' : 'It retries automatically; the error above says what it needs.'
+        )
+      );
   }
   const ov = jobs.overdue();
-  if (ov.length) items.push(item('jobs_overdue', 'warn', 'Scheduled jobs', `${ov.length} waiting to catch up: ${ov.map(o => o.name).join(', ')}`, 'They run on the next catch-up tick (every 10 minutes).'));
+  if (ov.length)
+    items.push(
+      item(
+        'jobs_overdue',
+        'warn',
+        'Scheduled jobs',
+        `${ov.length} waiting to catch up: ${ov.map(o => o.name).join(', ')}`,
+        'They run on the next catch-up tick (every 10 minutes).'
+      )
+    );
   // tools
   const ff = toolStatus();
-  items.push(item('ffmpeg', ff.ready ? 'ok' : 'warn', 'ffmpeg (video)', ff.ready ? 'installed' : 'missing — rendering, Shorts and thumbnails from frames are off', ff.hint));
+  items.push(
+    item(
+      'ffmpeg',
+      ff.ready ? 'ok' : 'warn',
+      'ffmpeg (video)',
+      ff.ready ? 'installed' : 'missing — rendering, Shorts and thumbnails from frames are off',
+      ff.hint
+    )
+  );
   const wh = engineStatus();
-  items.push(item('whisper', wh.whisper ? 'ok' : 'warn', 'Transcriber (Shorts)', wh.whisper ? (wh.modelReady ? 'ready' : 'model downloads on first use') : 'missing', wh.whisper ? null : wh.hint));
+  items.push(
+    item(
+      'whisper',
+      wh.whisper ? 'ok' : 'warn',
+      'Transcriber (Shorts)',
+      wh.whisper ? (wh.modelReady ? 'ready' : 'model downloads on first use') : 'missing',
+      wh.whisper ? null : wh.hint
+    )
+  );
   // phone alerts
-  items.push(item('alerts', channelsConfigured().length ? 'ok' : 'warn', 'Phone alerts', channelsConfigured().length ? channelsConfigured().join(', ') : 'none set up — you will not hear about breakouts or problems', channelsConfigured().length ? null : 'Settings → Phone alerts (iMessage is free on the Mac).'));
+  items.push(
+    item(
+      'alerts',
+      channelsConfigured().length ? 'ok' : 'warn',
+      'Phone alerts',
+      channelsConfigured().length ? channelsConfigured().join(', ') : 'none set up — you will not hear about breakouts or problems',
+      channelsConfigured().length ? null : 'Settings → Phone alerts (iMessage is free on the Mac).'
+    )
+  );
   const levels = items.map(i => i.level);
-  const out = { at: new Date().toISOString(), status: levels.includes('error') ? 'error' : levels.includes('warn') ? 'warn' : 'ok', errors: levels.filter(l => l === 'error').length, warnings: levels.filter(l => l === 'warn').length, items, jobs: jobs.status() };
+  const out = {
+    at: new Date().toISOString(),
+    status: levels.includes('error') ? 'error' : levels.includes('warn') ? 'warn' : 'ok',
+    errors: levels.filter(l => l === 'error').length,
+    warnings: levels.filter(l => l === 'warn').length,
+    items,
+    jobs: jobs.status(),
+  };
   setSetting('health_last', JSON.stringify({ at: out.at, status: out.status, errors: out.errors, warnings: out.warnings }));
   return out;
 }
@@ -71,7 +177,15 @@ export async function doctor() {
   const day = new Date().toISOString().slice(0, 10);
   const fresh = bad.filter(i => sent[i.id] !== day);
   if (fresh.length) {
-    await notify({ kind: 'health', force: true, title: `Tubescope: ${fresh.length} thing${fresh.length > 1 ? 's' : ''} need${fresh.length > 1 ? '' : 's'} attention`, body: fresh.slice(0, 5).map(i => `• ${i.title}: ${i.detail}${i.fix ? ` → ${i.fix}` : ''}`).join('\n') }).catch(() => {});
+    await notify({
+      kind: 'health',
+      force: true,
+      title: `Tubescope: ${fresh.length} thing${fresh.length > 1 ? 's' : ''} need${fresh.length > 1 ? '' : 's'} attention`,
+      body: fresh
+        .slice(0, 5)
+        .map(i => `• ${i.title}: ${i.detail}${i.fix ? ` → ${i.fix}` : ''}`)
+        .join('\n'),
+    }).catch(() => {});
     for (const i of fresh) sent[i.id] = day;
     setSetting('health_notified', JSON.stringify(sent));
   }

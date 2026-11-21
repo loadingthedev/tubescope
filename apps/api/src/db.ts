@@ -8,7 +8,10 @@ type AppDatabase = Omit<Database, 'prepare' | 'query'> & {
   prepare<Row = DbRow>(sql: string, params?: SQLQueryBindings[]): Statement<Row, SQLQueryBindings[]>;
   query<Row = DbRow>(sql: string): Statement<Row, SQLQueryBindings[]>;
 };
-interface SettingRow { key: string; value: string; }
+interface SettingRow {
+  key: string;
+  value: string;
+}
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,17 +37,25 @@ if (DB_PATH === path.join(DATA_DIR, 'tubescope.sqlite') && !fs.existsSync(DB_PAT
   try {
     const { file } = JSON.parse(fs.readFileSync(flag, 'utf8'));
     if (file && fs.existsSync(file)) {
-      const keep = path.join(DATA_DIR, 'backups', `tubescope-${new Date().toISOString().slice(0, 10)}-${new Date().toTimeString().slice(0, 8).replace(/:/g, '')}.sqlite`);
+      const keep = path.join(
+        DATA_DIR,
+        'backups',
+        `tubescope-${new Date().toISOString().slice(0, 10)}-${new Date().toTimeString().slice(0, 8).replace(/:/g, '')}.sqlite`
+      );
       fs.mkdirSync(path.dirname(keep), { recursive: true });
       if (fs.existsSync(DB_PATH)) {
-        const cur = new Database(DB_PATH, { strict: true, create: true }); cur.exec('PRAGMA wal_checkpoint(TRUNCATE)'); cur.close(true); // fold the WAL in first
+        const cur = new Database(DB_PATH, { strict: true, create: true });
+        cur.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        cur.close(true); // fold the WAL in first
         fs.copyFileSync(DB_PATH, keep);
       }
       for (const ext of ['-wal', '-shm']) fs.rmSync(DB_PATH + ext, { force: true });
       fs.copyFileSync(file, DB_PATH);
       console.log(`[restore] restored ${path.basename(file)} (previous data kept as ${path.basename(keep)})`);
     }
-  } catch (e) { console.error('[restore] failed, keeping the current database:', e.message); }
+  } catch (e) {
+    console.error('[restore] failed, keeping the current database:', e.message);
+  }
   fs.rmSync(flag, { force: true });
 })();
 
@@ -264,8 +275,7 @@ export function getSetting<T = string>(key: string, fallback: T = null): string 
   return row && row.value !== '' ? row.value : fallback; // empty string = unset
 }
 export function setSetting(key: string, value: unknown) {
-  db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-    .run(key, String(value ?? ''));
+  db.prepare('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value ?? ''));
 }
 export function allSettings(): SettingsResponse {
   const out: Record<string, string> = {};

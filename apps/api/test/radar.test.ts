@@ -11,45 +11,91 @@ const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const FAKE_CLAUDE = path.join(ROOT, 'test', 'fake-claude.ts');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-radar-'));
 let mock, child, base;
-const OWNER = 'UCowner00000000000000001', COMP = 'UCcomp000000000000000002';
+const OWNER = 'UCowner00000000000000001',
+  COMP = 'UCcomp000000000000000002';
 
 async function api(p, { method = 'GET', body }: { method?: string; body?: any } = {}) {
-  const res = await fetch(base + '/api' + p, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + '/api' + p, {
+    method,
+    headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   const text = await res.text();
-  let json; try { json = JSON.parse(text); } catch { json = text; }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = text;
+  }
   return { status: res.status, json };
 }
-const ok = async (p, o?) => { const r = await api(p, o); assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json).slice(0, 400)}`); return r.json; };
+const ok = async (p, o?) => {
+  const r = await api(p, o);
+  assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json).slice(0, 400)}`);
+  return r.json;
+};
 
 before(async () => {
   mock = await startMock(0);
   const port = 5100 + Math.floor(Math.random() * 300);
   base = `http://127.0.0.1:${port}`;
-  child = spawn(process.execPath, ['src/server.ts'], { cwd: ROOT, env: { ...process.env, PORT: String(port), TUBESCOPE_DATA_DIR: dataDir, TUBESCOPE_NO_SCHEDULER: '1', TUBESCOPE_NO_AUTOCONNECT: '1', YT_API_BASE: `http://127.0.0.1:${mock.port}/youtube/v3`, YT_ANALYTICS_BASE: `http://127.0.0.1:${mock.port}/v2/reports`, YT_SUGGEST_URL: `http://127.0.0.1:${mock.port}/complete/search` }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(process.execPath, ['src/server.ts'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      TUBESCOPE_DATA_DIR: dataDir,
+      TUBESCOPE_NO_SCHEDULER: '1',
+      TUBESCOPE_NO_AUTOCONNECT: '1',
+      YT_API_BASE: `http://127.0.0.1:${mock.port}/youtube/v3`,
+      YT_ANALYTICS_BASE: `http://127.0.0.1:${mock.port}/v2/reports`,
+      YT_SUGGEST_URL: `http://127.0.0.1:${mock.port}/complete/search`,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   child.stderr.on('data', d => process.stderr.write('[server] ' + d));
-  for (let i = 0; i < 50; i++) { try { await fetch(base + '/api/status'); break; } catch { await new Promise(r => setTimeout(r, 100)); } }
+  for (let i = 0; i < 50; i++) {
+    try {
+      await fetch(base + '/api/status');
+      break;
+    } catch {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
   await ok('/settings', { method: 'PUT', body: { yt_api_key: 'TESTKEY', ai_provider: 'none', default_country: 'US' } });
   await ok('/channels', { method: 'POST', body: { input: '@TheParentPlan', kind: 'owned', maxVideos: 100 } });
   await ok(`/competitors/${OWNER}`, { method: 'POST', body: { input: COMP } });
 });
-after(() => { child.kill(); mock.server.close(); });
+after(() => {
+  child.kill();
+  mock.server.close();
+});
 
 test('axes contract', async () => {
   const a = await ok('/radar/axes');
   assert.equal(Object.keys(a.axes).length, 8);
   assert.ok(Math.abs(Object.values<number>(a.defaultWeights).reduce((x, y) => x + y, 0) - 1) < 1e-9);
-  assert.equal(a.axes.demand.backtest, false); assert.equal(a.axes.hook.backtest, true, 'hook is backtested from local transcripts');
+  assert.equal(a.axes.demand.backtest, false);
+  assert.equal(a.axes.hook.backtest, true, 'hook is backtested from local transcripts');
 });
 
 test('score variants without AI: deterministic axes, ranking, notes, saved', async () => {
-  const d = await ok('/radar/score', { method: 'POST', body: { channelId: OWNER, variants: [{ title: 'The Medicaid Lookback Rule That Costs Families $80K' }, { title: 'medicaid stuff' }], keyword: 'medicaid lookback' } });
+  const d = await ok('/radar/score', {
+    method: 'POST',
+    body: {
+      channelId: OWNER,
+      variants: [{ title: 'The Medicaid Lookback Rule That Costs Families $80K' }, { title: 'medicaid stuff' }],
+      keyword: 'medicaid lookback',
+    },
+  });
   assert.equal(d.variants.length, 2);
   assert.equal(d.aiUsed, false);
   assert.ok(d.notes.some(n => /AI is off/.test(n)) && d.notes.some(n => /Uncalibrated/.test(n)));
   assert.equal(d.model.calibrated, false);
   for (const v of d.variants) {
     assert.ok(Number.isFinite(v.axes.demand) && Number.isFinite(v.axes.titleCraft) && Number.isFinite(v.axes.freshness));
-    assert.equal(v.axes.curiosity, null); assert.equal(v.axes.thumbnail, null);
+    assert.equal(v.axes.curiosity, null);
+    assert.equal(v.axes.thumbnail, null);
     assert.ok(v.score >= 0 && v.score <= 100 && v.prediction.multiplier > 0 && v.prediction.range80.length === 2);
     assert.ok(v.coverage > 0 && v.coverage < 1, 'AI axes missing → partial coverage');
     assert.ok(v.id > 0);
@@ -96,7 +142,8 @@ test('live watch: board, pace vs baseline, alerts once, launch curve', async () 
   const w2 = await ok('/radar/watch/run', { method: 'POST' });
   const board = await ok(`/radar/watch/${OWNER}`);
   assert.ok(board.lastRun && board.lastRun.watched === w2.watched);
-  const own = board.videos.filter(v => v.kind === 'owned'), comp = board.videos.filter(v => v.kind === 'competitor');
+  const own = board.videos.filter(v => v.kind === 'owned'),
+    comp = board.videos.filter(v => v.kind === 'competitor');
   assert.ok(own.length >= 3 && comp.length >= 3);
   for (const v of board.videos) {
     assert.ok(v.views > 0 && v.age_hours > 0 && v.spark.length >= 2, 'two readings → sparkline');
@@ -109,7 +156,10 @@ test('live watch: board, pace vs baseline, alerts once, launch curve', async () 
   assert.ok(newest.idx > own.find(v => v !== newest).idx, 'the 6× upload paces ahead of a normal one');
   const after = (await ok(`/alerts/${OWNER}`)).filter(a => a.kind.startsWith('radar'));
   assert.equal(after.length, before.length, 'alerts fire once per video, not on every tick');
-  assert.ok(after.some(a => a.kind === 'radar_breakout' || a.kind === 'radar_competitor_breakout'), 'a breakout alert was raised');
+  assert.ok(
+    after.some(a => a.kind === 'radar_breakout' || a.kind === 'radar_competitor_breakout'),
+    'a breakout alert was raised'
+  );
   const curve = await ok(`/radar/curve/${newest.video_id}`);
   assert.equal(curve.expected.length, 24);
   assert.ok(curve.ticks.length >= 2);
@@ -131,7 +181,8 @@ test('calibration without AI: backtest, holdout, stored model, used by scoring',
   assert.equal(model.current.id, m.id);
   assert.ok(model.history.length >= 1 && model.history[0].metrics.points === undefined, 'history list stays light');
   const d = await ok('/radar/score', { method: 'POST', body: { channelId: OWNER, title: 'Why Estate Recovery Takes the Family House', save: false } });
-  assert.equal(d.model.id, m.id); assert.ok(d.model.calibrated);
+  assert.equal(d.model.id, m.id);
+  assert.ok(d.model.calibrated);
   assert.ok(!d.notes.some(n => /Uncalibrated/.test(n)));
   const ex = await ok(`/radar/video/${(await ok(`/channels/${OWNER}/videos?limit=5`)).videos[4].id}`);
   assert.ok(ex.actualX > 0 && ex.score !== null && ex.modelId === m.id);
@@ -141,11 +192,26 @@ test('calibration without AI: backtest, holdout, stored model, used by scoring',
 test('AI axes via the Claude CLI: package scoring with thumbnails + hook, cached calibration features', async () => {
   await ok('/settings', { method: 'PUT', body: { ai_provider: 'claude-cli', claude_cli_path: FAKE_CLAUDE } });
   try {
-    const up = await ok('/packaging/thumbnail/upload', { method: 'POST', body: { dataUrl: 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'), name: 'a.jpg' } });
-    const d = await ok('/radar/score', { method: 'POST', body: { channelId: OWNER, hook: 'Medicaid can take your mom\'s house after she dies. Here is the rule and the two ways families stop it.',
-      variants: [{ title: 'Nobody Warns You About Estate Recovery', thumbnailUrl: up.url }, { title: 'Estate Recovery Overview', thumbnailPath: up.path }, { title: 'Estate recovery basics' }] } });
+    const up = await ok('/packaging/thumbnail/upload', {
+      method: 'POST',
+      body: { dataUrl: 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'), name: 'a.jpg' },
+    });
+    const d = await ok('/radar/score', {
+      method: 'POST',
+      body: {
+        channelId: OWNER,
+        hook: "Medicaid can take your mom's house after she dies. Here is the rule and the two ways families stop it.",
+        variants: [
+          { title: 'Nobody Warns You About Estate Recovery', thumbnailUrl: up.url },
+          { title: 'Estate Recovery Overview', thumbnailPath: up.path },
+          { title: 'Estate recovery basics' },
+        ],
+      },
+    });
     assert.equal(d.aiUsed, true, d.notes.join(';'));
-    const [a, b, c] = ['Nobody Warns You About Estate Recovery', 'Estate Recovery Overview', 'Estate recovery basics'].map(t => d.variants.find(v => v.title === t));
+    const [a, b, c] = ['Nobody Warns You About Estate Recovery', 'Estate Recovery Overview', 'Estate recovery basics'].map(t =>
+      d.variants.find(v => v.title === t)
+    );
     assert.ok(a.axes.curiosity > 0 && a.axes.emotion === 82 && a.axes.thumbnail === 61 && a.axes.hook >= 40 && a.axes.hook < 90);
     assert.ok(b.axes.thumbnail === 61, 'thumbnailPath works');
     assert.equal(c.axes.thumbnail, null, 'no image → no thumbnail rating');
@@ -159,12 +225,14 @@ test('AI axes via the Claude CLI: package scoring with thumbnails + hook, cached
     assert.ok(j1.result.metrics.sample.withAI >= 14);
     assert.ok(j1.result.axes.curiosity.n >= 14 && j1.result.axes.thumbnail.n >= 14);
     const j2 = await ok(`/radar/calibrate/${OWNER}?wait=1`, { method: 'POST', body: { aiLimit: 14 } });
-    assert.equal(j2.result.metrics.ai.cached, 14); assert.equal(j2.result.metrics.ai.done, 0, 'second run costs no AI calls');
+    assert.equal(j2.result.metrics.ai.cached, 14);
+    assert.equal(j2.result.metrics.ai.done, 0, 'second run costs no AI calls');
     const vids = (await ok(`/channels/${OWNER}/videos?limit=3`)).videos;
     const mature = await ok(`/radar/video/${vids[2].id}`); // 27 days old → labelled → AI-rated by calibration
     assert.ok(Number.isFinite(mature.axes.curiosity) && Number.isFinite(mature.axes.thumbnail), 'featurized videos show AI axes in the drawer');
     const young = await ok(`/radar/video/${vids[0].id}`); // 9 days old → not yet judged, not rated
-    assert.equal(young.actualX, null); assert.equal(young.axes.curiosity, null);
+    assert.equal(young.actualX, null);
+    assert.equal(young.axes.curiosity, null);
   } finally {
     await ok('/settings', { method: 'PUT', body: { ai_provider: 'none' } });
   }
@@ -176,7 +244,12 @@ test('MCP server exposes the radar tools', async () => {
   mcp.stdout.on('data', d => lines.push(...String(d).split('\n').filter(Boolean)));
   const send = o => mcp.stdin.write(JSON.stringify(o) + '\n');
   send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
-  send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'radar_score', arguments: { variants: [{ title: 'Medicaid Pays For This (Not That)' }] } } });
+  send({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/call',
+    params: { name: 'radar_score', arguments: { variants: [{ title: 'Medicaid Pays For This (Not That)' }] } },
+  });
   send({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'radar_watch', arguments: {} } });
   for (let i = 0; i < 100 && lines.length < 3; i++) await new Promise(r => setTimeout(r, 50));
   mcp.stdin.end();

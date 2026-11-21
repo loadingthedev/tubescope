@@ -12,13 +12,20 @@ const BASE = (env('URL') || 'http://localhost:4949').replace(/\/$/, '');
 
 async function call(method, path, body) {
   let res;
-  try { res = await fetch(BASE + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined }); }
-  catch (e) { // no HTTP response at all: Tubescope isn't reachable
+  try {
+    res = await fetch(BASE + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  } catch (e) {
+    // no HTTP response at all: Tubescope isn't reachable
     const why = e.cause?.code || e.cause?.message || e.message;
     throw new Error(`Tubescope isn't running at ${BASE} (${why}). Start it on the Mac with: bun start in the Tubescope folder. Then try again.`);
   }
   const text = await res.text();
-  let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = { raw: text };
+  }
   if (!res.ok) throw new Error(json?.error || `${method} ${path} → ${res.status}`);
   return json;
 }
@@ -31,9 +38,23 @@ rl.on('line', async line => {
   if (!line.trim()) return;
   pending++;
   try {
-    let req; try { req = JSON.parse(line); } catch { return; }
+    let req;
+    try {
+      req = JSON.parse(line);
+    } catch {
+      return;
+    }
     const r = await handleMcpMessage(req, { runTool, base: BASE });
     if (r) out(r);
-  } finally { pending--; }
+  } finally {
+    pending--;
+  }
 });
-process.stdin.on('end', () => { const t = setInterval(() => { if (pending === 0) { clearInterval(t); process.exit(0); } }, 20); });
+process.stdin.on('end', () => {
+  const t = setInterval(() => {
+    if (pending === 0) {
+      clearInterval(t);
+      process.exit(0);
+    }
+  }, 20);
+});

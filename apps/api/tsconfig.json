@@ -1,13 +1,7 @@
 {
-  "include": [
-    "src/**/*.ts",
-    "mcp/**/*.ts",
-    "test/**/*.ts"
-  ],
+  "include": ["src/**/*.ts", "mcp/**/*.ts", "test/**/*.ts"],
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": [
-      "bun"
-    ]
+    "types": ["bun"]
   }
 }

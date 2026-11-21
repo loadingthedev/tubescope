@@ -23,7 +23,7 @@ test('environment fallback prefers the new name, including an explicit empty val
     for (const name of names) delete process.env[name];
     assert.equal(env('DATA_DIR'), undefined);
   } finally {
-    names.forEach((name, i) => saved[i] === undefined ? delete process.env[name] : process.env[name] = saved[i]);
+    names.forEach((name, i) => (saved[i] === undefined ? delete process.env[name] : (process.env[name] = saved[i])));
   }
 });
 
@@ -41,21 +41,35 @@ test('default database rename preserves settings and WAL data, accepts old backu
   };
   try {
     // Exit without closing SQLite so the copied sidecars contain a committed WAL row.
-    run(`import { Database } from 'bun:sqlite'; const db = new Database(${JSON.stringify(oldFile)}); db.exec("PRAGMA journal_mode=WAL; CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO settings VALUES ('migration_marker', 'preserved')"); process.exit(0);`);
+    run(
+      `import { Database } from 'bun:sqlite'; const db = new Database(${JSON.stringify(oldFile)}); db.exec("PRAGMA journal_mode=WAL; CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO settings VALUES ('migration_marker', 'preserved')"); process.exit(0);`
+    );
     assert.ok(fs.existsSync(oldFile + '-wal'));
     assert.ok(fs.existsSync(oldFile + '-shm'));
-    assert.equal(run("import { db, getSetting } from './src/db.ts'; console.log(getSetting('migration_marker')); db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); db.close(true);"), 'preserved');
+    assert.equal(
+      run(
+        "import { db, getSetting } from './src/db.ts'; console.log(getSetting('migration_marker')); db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); db.close(true);"
+      ),
+      'preserved'
+    );
     for (const ext of ['', '-wal', '-shm']) assert.equal(fs.existsSync(oldFile + ext), false);
     assert.ok(fs.existsSync(newFile));
     const backupDir = path.join(dir, 'backups');
     const backupName = run("import { create } from './src/services/backup.ts'; console.log((await create()).created);");
     fs.renameSync(path.join(backupDir, backupName), path.join(backupDir, 'tubedesk-2026-11-21.sqlite'));
-    run("import { list, stageRestore } from './src/services/backup.ts'; if (!list().some(b => b.file === 'tubedesk-2026-11-21.sqlite')) throw Error('missing old backup'); stageRestore('tubedesk-2026-11-21.sqlite');");
+    run(
+      "import { list, stageRestore } from './src/services/backup.ts'; if (!list().some(b => b.file === 'tubedesk-2026-11-21.sqlite')) throw Error('missing old backup'); stageRestore('tubedesk-2026-11-21.sqlite');"
+    );
     fs.unlinkSync(path.join(dir, 'restore-pending.json'));
     const old = new Database(oldFile);
     old.exec("CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO settings VALUES ('migration_marker', 'old untouched')");
     old.close(true);
-    assert.equal(run("import { db, getSetting } from './src/db.ts'; console.log(getSetting('migration_marker')); db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); db.close(true);"), 'preserved');
+    assert.equal(
+      run(
+        "import { db, getSetting } from './src/db.ts'; console.log(getSetting('migration_marker')); db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); db.close(true);"
+      ),
+      'preserved'
+    );
     assert.ok(fs.existsSync(oldFile));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

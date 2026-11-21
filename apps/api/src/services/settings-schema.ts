@@ -5,14 +5,36 @@
 import cron from 'node-cron';
 import { getSetting, setSetting, allSettings } from '../db.ts';
 
-interface SettingSchema { key: string; group: string; type: string; description: string; default?: string | number | boolean; min?: number; max?: number; local?: boolean; values?: string[]; pattern?: string; }
-const S = (key: string, group: string, type: string, description: string, extra: Partial<SettingSchema> = {}): SettingSchema => ({ key, group, type, description, ...extra });
+interface SettingSchema {
+  key: string;
+  group: string;
+  type: string;
+  description: string;
+  default?: string | number | boolean;
+  min?: number;
+  max?: number;
+  local?: boolean;
+  values?: string[];
+  pattern?: string;
+}
+const S = (key: string, group: string, type: string, description: string, extra: Partial<SettingSchema> = {}): SettingSchema => ({
+  key,
+  group,
+  type,
+  description,
+  ...extra,
+});
 const bool = (key, group, description, def) => S(key, group, 'bool', description, { default: def });
 
 export const SCHEMA = [
   // youtube
   S('yt_api_key', 'youtube', 'secret', 'YouTube Data API v3 key (Google Cloud → APIs & Services → Credentials). Required for everything.'),
-  S('google_client_id', 'youtube', 'string', 'OAuth client ID (Desktop or Web app, redirect http://localhost:4949/oauth/callback) — needed to connect owned channels for read-only analytics.'),
+  S(
+    'google_client_id',
+    'youtube',
+    'string',
+    'OAuth client ID (Desktop or Web app, redirect http://localhost:4949/oauth/callback) — needed to connect owned channels for read-only analytics.'
+  ),
   S('google_client_secret', 'youtube', 'secret', 'OAuth client secret for google_client_id.'),
   S('yt_quota_limit', 'youtube', 'int', 'Daily YouTube API quota Tubescope may use.', { default: 10000, min: 1000 }),
   S('yt_quota_reserve', 'youtube', 'int', 'Units kept back for essential read calls.', { default: 500, min: 0 }),
@@ -20,7 +42,13 @@ export const SCHEMA = [
   S('sync_depth_owned', 'youtube', 'int', 'How many videos to keep in sync per owned channel.', { default: 500, min: 50 }),
   S('sync_depth_competitor', 'youtube', 'int', 'How many videos to keep in sync per competitor.', { default: 50, min: 10 }),
   // ai
-  S('ai_provider', 'ai', 'enum', 'Which AI writes ideas, titles and scores: the Claude Code CLI on this Mac (uses your Claude subscription), the Anthropic API, or none.', { values: ['claude-cli', 'anthropic', 'none'], default: 'none' }),
+  S(
+    'ai_provider',
+    'ai',
+    'enum',
+    'Which AI writes ideas, titles and scores: the Claude Code CLI on this Mac (uses your Claude subscription), the Anthropic API, or none.',
+    { values: ['claude-cli', 'anthropic', 'none'], default: 'none' }
+  ),
   S('anthropic_api_key', 'ai', 'secret', 'Anthropic API key (only for ai_provider "anthropic").'),
   S('anthropic_model', 'ai', 'string', 'Model for ai_provider "anthropic".', { default: 'claude-sonnet-4-5' }),
   S('claude_cli_model', 'ai', 'string', 'Model alias for the Claude Code CLI (blank = its default).'),
@@ -29,7 +57,7 @@ export const SCHEMA = [
   bool('radar_enabled', 'radar', 'Virality radar on.', '1'),
   S('radar_breakout_x', 'radar', 'number', 'Pace (× the usual launch curve) that counts as a breakout.', { default: 2, min: 1.2, max: 10 }),
   S('radar_watch_days', 'radar', 'int', 'Watch your uploads for this many days.', { default: 7, min: 1, max: 60 }),
-  bool('radar_watch_competitors', 'radar', 'Watch tracked competitors\' new uploads.', '1'),
+  bool('radar_watch_competitors', 'radar', "Watch tracked competitors' new uploads.", '1'),
   S('radar_watch_competitor_days', 'radar', 'int', 'Watch competitor uploads for this many days.', { default: 3, min: 1, max: 30 }),
   S('radar_ai_limit', 'radar', 'int', 'Max AI-scored items per calibration.', { default: 60, min: 0, max: 500 }),
   bool('radar_calibrate_ai', 'radar', 'Use AI features when calibrating.', '1'),
@@ -41,7 +69,10 @@ export const SCHEMA = [
   bool('ideas_comments', 'ideas', 'Use unanswered viewer questions as an idea signal.', '1'),
   S('ideas_comment_pages', 'ideas', 'int', 'Comment pages read per recent upload.', { default: 2, min: 1, max: 10 }),
   // autopilot
-  S('autopilot_mode', 'autopilot', 'enum', 'What the autopilot does with lagging uploads: suggest titles/thumbnails, or nothing.', { values: ['suggest', 'off'], default: 'suggest' }),
+  S('autopilot_mode', 'autopilot', 'enum', 'What the autopilot does with lagging uploads: suggest titles/thumbnails, or nothing.', {
+    values: ['suggest', 'off'],
+    default: 'suggest',
+  }),
   bool('autopilot_titles', 'autopilot', 'Autopilot may suggest titles.', '1'),
   bool('autopilot_thumbnails', 'autopilot', 'Autopilot may suggest thumbnails.', '1'),
   bool('autopilot_shorts', 'autopilot', 'Autopilot also acts on Shorts.', '0'),
@@ -49,18 +80,27 @@ export const SCHEMA = [
   S('autopilot_max_days', 'autopilot', 'int', 'Latest age (days) to act on an upload.', { default: 7, min: 1, max: 60 }),
   S('autopilot_min_gain', 'autopilot', 'int', 'Radar points a new title/thumbnail must win by.', { default: 8, min: 1, max: 50 }),
   // shorts
-  S('whisper_model_name', 'shorts', 'enum', 'Speech model for local transcription (downloads once).', { values: ['base.en', 'small.en', 'medium.en', 'small', 'medium'], default: 'small.en' }),
+  S('whisper_model_name', 'shorts', 'enum', 'Speech model for local transcription (downloads once).', {
+    values: ['base.en', 'small.en', 'medium.en', 'small', 'medium'],
+    default: 'small.en',
+  }),
   S('whisper_language', 'shorts', 'string', 'Spoken language code (en, es, …).'),
   S('whisper_threads', 'shorts', 'int', 'CPU threads for transcription.', { default: 6, min: 1, max: 32 }),
   S('whisper_path', 'shorts', 'path', 'Path to whisper-cli (blank = auto-detect).', { local: true }),
   S('whisper_model', 'shorts', 'path', 'Path to a ggml model file (blank = automatic).', { local: true }),
   // publishing
   S('timezone', 'publishing', 'timezone', 'Your time zone (IANA, e.g. America/New_York) for schedules and best slots.'),
-  S('default_publish_hour', 'publishing', 'int', 'Publish hour (local) when there is not enough history to learn the best slots.', { default: 15, min: 6, max: 23 }),
+  S('default_publish_hour', 'publishing', 'int', 'Publish hour (local) when there is not enough history to learn the best slots.', {
+    default: 15,
+    min: 6,
+    max: 23,
+  }),
   S('ffmpeg_path', 'publishing', 'path', 'Path to ffmpeg (blank = auto-detect).', { local: true }),
   S('ffprobe_path', 'publishing', 'path', 'Path to ffprobe (blank = auto-detect).', { local: true }),
   // voiceover
-  S('voice_provider', 'voiceover', 'enum', 'Voiceover provider (blank = HeyGen when its key is set, else ElevenLabs).', { values: ['', 'heygen', 'elevenlabs'] }),
+  S('voice_provider', 'voiceover', 'enum', 'Voiceover provider (blank = HeyGen when its key is set, else ElevenLabs).', {
+    values: ['', 'heygen', 'elevenlabs'],
+  }),
   S('heygen_api_key', 'voiceover', 'secret', 'HeyGen API key.'),
   S('heygen_voice_id', 'voiceover', 'string', 'HeyGen voice id (your cloned voice).'),
   S('heygen_model', 'voiceover', 'string', 'HeyGen TTS model (blank = default).'),
@@ -74,8 +114,13 @@ export const SCHEMA = [
   S('notify_ntfy_topic', 'notifications', 'secret', 'ntfy topic for push alerts (free ntfy app).', { local: true }),
   S('notify_ntfy_server', 'notifications', 'url', 'ntfy server.', { default: 'https://ntfy.sh', local: true }),
   S('notify_webhook_url', 'notifications', 'secret', 'Webhook (Slack/Discord/n8n) that receives alerts as JSON.', { local: true }),
-  S('notify_quiet', 'notifications', 'string', 'Quiet hours "22-7" (held, then sent as a digest); "off" for none.', { default: '22-7', pattern: '^(off|\\d{1,2}-\\d{1,2})$' }),
-  S('notify_kinds', 'notifications', 'list', 'Which alerts go to the phone (comma-separated).', { values: ['radar_breakout', 'radar_competitor_breakout', 'radar_lagging', 'autopilot', 'ideas_daily', 'weekly_summary', 'breakout'] }),
+  S('notify_quiet', 'notifications', 'string', 'Quiet hours "22-7" (held, then sent as a digest); "off" for none.', {
+    default: '22-7',
+    pattern: '^(off|\\d{1,2}-\\d{1,2})$',
+  }),
+  S('notify_kinds', 'notifications', 'list', 'Which alerts go to the phone (comma-separated).', {
+    values: ['radar_breakout', 'radar_competitor_breakout', 'radar_lagging', 'autopilot', 'ideas_daily', 'weekly_summary', 'breakout'],
+  }),
   // schedule
   S('snapshot_cron', 'schedule', 'cron', 'Daily stats snapshot.', { default: '15 6 * * *' }),
   S('radar_watch_cron', 'schedule', 'cron', 'Live breakout watch.', { default: '7 * * * *' }),
@@ -89,11 +134,19 @@ export const SCHEMA = [
   S('backup_cron', 'schedule', 'cron', 'Nightly database backup and housekeeping (7 daily + 8 weekly backups kept).', { default: '30 3 * * *' }),
   S('doctor_cron', 'schedule', 'cron', 'Morning check-up; problems are texted once a day.', { default: '20 8 * * *' }),
   S('index_enabled', 'research', 'bool', 'Grow the outlier index every morning from spare YouTube quota.', { default: '1' }),
-  S('index_daily_units', 'research', 'number', 'Quota units the outlier index may spend per day (102 per topic searched).', { default: '1500', min: 0, max: 50000 }),
-  S('index_reserve', 'research', 'number', 'Quota units always left free for everything else before the index crawls.', { default: '3000', min: 0, max: 100000 }),
-  S('index_seeds', 'research', 'string', 'Extra topics for the outlier index, comma-separated (your channels\' topics are added automatically).'),
+  S('index_daily_units', 'research', 'number', 'Quota units the outlier index may spend per day (102 per topic searched).', {
+    default: '1500',
+    min: 0,
+    max: 50000,
+  }),
+  S('index_reserve', 'research', 'number', 'Quota units always left free for everything else before the index crawls.', {
+    default: '3000',
+    min: 0,
+    max: 100000,
+  }),
+  S('index_seeds', 'research', 'string', "Extra topics for the outlier index, comma-separated (your channels' topics are added automatically)."),
   S('rank_max_keywords', 'research', 'number', 'Most keywords the rank tracker checks daily (100 units each).', { default: '15', min: 0, max: 200 }),
-  S('media_dirs', 'research', 'string', 'Folders searched for your uploads\' source files (default: Movies, Downloads, Desktop, Documents).', { local: true }),
+  S('media_dirs', 'research', 'string', "Folders searched for your uploads' source files (default: Movies, Downloads, Desktop, Documents).", { local: true }),
   S('jobs_catchup_minutes', 'schedule', 'number', 'How often missed or failed scheduled jobs are retried.', { default: '10', min: 5, max: 120 }),
 ];
 export const BY_KEY = Object.fromEntries(SCHEMA.map(s => [s.key, s]));
@@ -107,11 +160,18 @@ export function describe(group = null) {
   return SCHEMA.filter(s => !group || s.group === group).map(s => {
     const raw = all[s.key];
     const set = raw !== undefined && raw !== null && raw !== '';
-    return { ...s, value: s.type === 'secret' ? (set ? mask(raw) : '') : (set ? raw : (s.default ?? '')), set, isDefault: !set };
+    return { ...s, value: s.type === 'secret' ? (set ? mask(raw) : '') : set ? raw : (s.default ?? ''), set, isDefault: !set };
   });
 }
 
-function validTimezone(tz) { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; } }
+function validTimezone(tz) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** Validate and normalise one value; throws a clear message. */
 export function validate(key, value) {
@@ -125,16 +185,19 @@ export function validate(key, value) {
       if (v === false || v === 0 || /^(0|false|no|off)$/i.test(String(v))) return '0';
       throw new Error(`${key} must be true/false`);
     }
-    case 'int': case 'number': {
+    case 'int':
+    case 'number': {
       if (v === '') return '';
       const n = Number(v);
-      if (!Number.isFinite(n) || (s.type === 'int' && !Number.isInteger(n))) throw new Error(`${key} must be ${s.type === 'int' ? 'a whole number' : 'a number'}`);
+      if (!Number.isFinite(n) || (s.type === 'int' && !Number.isInteger(n)))
+        throw new Error(`${key} must be ${s.type === 'int' ? 'a whole number' : 'a number'}`);
       if (s.min !== undefined && n < s.min) throw new Error(`${key} must be ≥ ${s.min}`);
       if (s.max !== undefined && n > s.max) throw new Error(`${key} must be ≤ ${s.max}`);
       return String(n);
     }
     case 'enum':
-      if (!s.values.includes(String(v))) throw new Error(`${key} must be one of: ${s.values.filter(Boolean).join(', ')}${s.values.includes('') ? ' (or blank)' : ''}`);
+      if (!s.values.includes(String(v)))
+        throw new Error(`${key} must be one of: ${s.values.filter(Boolean).join(', ')}${s.values.includes('') ? ' (or blank)' : ''}`);
       return String(v);
     case 'list': {
       const items = (Array.isArray(v) ? v : String(v).split(',')).map(x => String(x).trim()).filter(Boolean);
@@ -173,7 +236,9 @@ export function apply(changes, { remote = false }: { remote?: boolean } = {}) {
       if (s?.local && remote) throw new Error(`${k} can only be changed on the Mac running Tubescope (Settings page or a local AI client)`);
       if (s?.type === 'secret' && typeof raw === 'string' && raw.startsWith('••••')) continue; // masked echo: unchanged
       out[k] = validate(k, raw);
-    } catch (e) { errors.push(e.message); }
+    } catch (e) {
+      errors.push(e.message);
+    }
   }
   if (errors.length) throw Object.assign(new Error(errors.join('; ')), { status: 400 });
   for (const [k, v] of Object.entries(out)) setSetting(k, v);

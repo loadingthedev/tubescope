@@ -9,8 +9,25 @@ import { startScheduler } from './jobs/scheduler.ts';
 // A forgotten .catch() somewhere must not take the whole desk down (Node exits on unhandled rejections by default).
 process.on('unhandledRejection', e => console.error('[unhandled]', (e as Error)?.stack || e));
 // A real crash leaves state unknown: log it and exit so launchd starts a clean process.
-process.on('uncaughtException', e => { console.error('[crash]', (e as Error)?.stack || e); try { db.close(true); } catch { /* */ } process.exit(1); });
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); db.close(true); } catch { /* */ } process.exit(0); });
+process.on('uncaughtException', e => {
+  console.error('[crash]', (e as Error)?.stack || e);
+  try {
+    db.close(true);
+  } catch {
+    /* */
+  }
+  process.exit(1);
+});
+for (const sig of ['SIGTERM', 'SIGINT'])
+  process.on(sig, () => {
+    try {
+      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+      db.close(true);
+    } catch {
+      /* */
+    }
+    process.exit(0);
+  });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -36,12 +53,18 @@ app.use((req, res, next) => {
     const origin = req.headers.origin;
     const site = req.headers['sec-fetch-site'];
     let sameOrigin = false;
-    try { sameOrigin = !!origin && (new URL(origin).host.toLowerCase() === host); } catch { /* malformed */ }
+    try {
+      sameOrigin = !!origin && new URL(origin).host.toLowerCase() === host;
+    } catch {
+      /* malformed */
+    }
     const trustedOrigin = !origin || sameOrigin || /^(chrome|moz)-extension:\/\//.test(origin) || /^https:\/\/(www\.)?youtube\.com$/.test(origin);
-    if (!trustedOrigin || (site === 'cross-site' && !sameOrigin && !/^(chrome|moz)-extension:|^https:\/\/(www\.)?youtube\.com$/.test(origin || ''))) return res.status(403).json({ error: 'Cross-site request refused.' });
+    if (!trustedOrigin || (site === 'cross-site' && !sameOrigin && !/^(chrome|moz)-extension:|^https:\/\/(www\.)?youtube\.com$/.test(origin || '')))
+      return res.status(403).json({ error: 'Cross-site request refused.' });
   }
   // Calls relayed for remote AI apps may only use the API (which applies its own remote rules).
-  if (req.headers['x-tubescope-origin'] === 'remote' && !req.path.startsWith('/api/')) return res.status(403).json({ error: 'Remote apps can only use the Tubescope API.' });
+  if (req.headers['x-tubescope-origin'] === 'remote' && !req.path.startsWith('/api/'))
+    return res.status(403).json({ error: 'Remote apps can only use the Tubescope API.' });
   next();
 });
 
@@ -76,10 +99,15 @@ const PORT = Number(process.env.PORT || getSetting('port', 4949));
 const server = app.listen(PORT, getSetting('allow_lan', '0') === '1' ? '0.0.0.0' : '127.0.0.1', () => {
   console.log(`Tubescope running at http://localhost:${PORT}`);
   if (env('NO_SCHEDULER') !== '1') startScheduler();
-
 });
 
 // Loopback on IPv6 too, so "localhost" connects at once whichever address the browser tries first.
-if (getSetting('allow_lan', '0') !== '1') app.listen(PORT, '::1').on('error', () => { /* no IPv6 loopback: fine */ });
+if (getSetting('allow_lan', '0') !== '1')
+  app.listen(PORT, '::1').on('error', () => {
+    /* no IPv6 loopback: fine */
+  });
 // Port taken (an old copy still running): say so plainly and exit non-zero so launchd retries shortly.
-server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${PORT} is already in use — another Tubescope is running. Retrying via launchd.` : e.message); process.exit(1); });
+server.on('error', e => {
+  console.error(e.code === 'EADDRINUSE' ? `Port ${PORT} is already in use — another Tubescope is running. Retrying via launchd.` : e.message);
+  process.exit(1);
+});

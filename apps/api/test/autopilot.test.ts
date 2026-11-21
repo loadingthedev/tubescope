@@ -12,41 +12,112 @@ import { startMock, calls, REPORTING, TITLE_OVERRIDES } from './mock-youtube.ts'
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const FAKE_CLAUDE = path.join(ROOT, 'test', 'fake-claude.ts');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-autopilot-'));
-const OWNER = 'UCowner00000000000000001', COMP = 'UCcomp000000000000000002';
+const OWNER = 'UCowner00000000000000001',
+  COMP = 'UCcomp000000000000000002';
 const FFMPEG = ['/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg', '/opt/homebrew/bin/ffmpeg'].find(f => fs.existsSync(f));
 let mock, child, base, hook, hookPort, db;
 const received = [];
 
 async function api(p, { method = 'GET', body }: { method?: string; body?: any } = {}) {
-  const res = await fetch(base + '/api' + p, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + '/api' + p, {
+    method,
+    headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   const text = await res.text();
-  let json; try { json = JSON.parse(text); } catch { json = text; }
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = text;
+  }
   return { status: res.status, json };
 }
-const ok = async (p, o?) => { const r = await api(p, o); assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json).slice(0, 500)}`); return r.json; };
-const waitFor = async (fn, ms = 3000) => { for (let t = 0; t < ms; t += 50) { if (fn()) return true; await new Promise(r => setTimeout(r, 50)); } return fn(); };
+const ok = async (p, o?) => {
+  const r = await api(p, o);
+  assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json).slice(0, 500)}`);
+  return r.json;
+};
+const waitFor = async (fn, ms = 3000) => {
+  for (let t = 0; t < ms; t += 50) {
+    if (fn()) return true;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  return fn();
+};
 const vidId = i => ('owne' + String(i).padStart(7, '0')).slice(0, 11);
 
 before(async () => {
   mock = await startMock(0);
-  hook = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => { received.push(JSON.parse(b)); res.end('ok'); }); });
+  hook = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', d => (b += d));
+    req.on('end', () => {
+      received.push(JSON.parse(b));
+      res.end('ok');
+    });
+  });
   await new Promise(r => hook.listen(0, '127.0.0.1', r));
   hookPort = hook.address().port;
   const port = 5400 + Math.floor(Math.random() * 300);
   base = `http://127.0.0.1:${port}`;
   const M = `http://127.0.0.1:${mock.port}`;
-  child = spawn(process.execPath, ['src/server.ts'], { cwd: ROOT, env: { ...process.env, TZ: Intl.DateTimeFormat().resolvedOptions().timeZone, PORT: String(port), TUBESCOPE_DATA_DIR: dataDir, TUBESCOPE_NO_SCHEDULER: '1', TUBESCOPE_NO_AUTOCONNECT: '1', YT_API_BASE: `${M}/youtube/v3`, YT_ANALYTICS_BASE: `${M}/v2/reports`, YT_SUGGEST_URL: `${M}/complete/search`, YT_UPLOAD_BASE: `${M}/upload`, YT_REPORTING_BASE: `${M}/reporting/v1` }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(process.execPath, ['src/server.ts'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      TZ: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      PORT: String(port),
+      TUBESCOPE_DATA_DIR: dataDir,
+      TUBESCOPE_NO_SCHEDULER: '1',
+      TUBESCOPE_NO_AUTOCONNECT: '1',
+      YT_API_BASE: `${M}/youtube/v3`,
+      YT_ANALYTICS_BASE: `${M}/v2/reports`,
+      YT_SUGGEST_URL: `${M}/complete/search`,
+      YT_UPLOAD_BASE: `${M}/upload`,
+      YT_REPORTING_BASE: `${M}/reporting/v1`,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   child.stderr.on('data', d => process.stderr.write('[server] ' + d));
-  for (let i = 0; i < 50; i++) { try { await fetch(base + '/api/status'); break; } catch { await new Promise(r => setTimeout(r, 100)); } }
-  await ok('/settings', { method: 'PUT', body: { yt_api_key: 'TESTKEY', ai_provider: 'claude-cli', claude_cli_path: FAKE_CLAUDE, default_country: 'US',
-    notify_webhook_url: `http://127.0.0.1:${hookPort}/hook`, notify_quiet: '', radar_watch_days: '30', radar_watch_competitor_days: '30', autopilot_max_days: '30', autopilot_min_gain: '1' } });
+  for (let i = 0; i < 50; i++) {
+    try {
+      await fetch(base + '/api/status');
+      break;
+    } catch {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+  await ok('/settings', {
+    method: 'PUT',
+    body: {
+      yt_api_key: 'TESTKEY',
+      ai_provider: 'claude-cli',
+      claude_cli_path: FAKE_CLAUDE,
+      default_country: 'US',
+      notify_webhook_url: `http://127.0.0.1:${hookPort}/hook`,
+      notify_quiet: '',
+      radar_watch_days: '30',
+      radar_watch_competitor_days: '30',
+      autopilot_max_days: '30',
+      autopilot_min_gain: '1',
+    },
+  });
   await ok('/channels', { method: 'POST', body: { input: '@TheParentPlan', kind: 'owned', maxVideos: 100 } });
   await ok(`/competitors/${OWNER}`, { method: 'POST', body: { input: COMP } });
   const { Database } = await import('bun:sqlite');
   db = new Database(path.join(dataDir, 'tubescope.sqlite'), { strict: true, create: true });
-  db.prepare('UPDATE channels SET oauth_json = ? WHERE id = ?').run(JSON.stringify({ access_token: 'tok', refresh_token: 'rt', expires_at: Date.now() + 3600e3 }), OWNER);
+  db.prepare('UPDATE channels SET oauth_json = ? WHERE id = ?').run(
+    JSON.stringify({ access_token: 'tok', refresh_token: 'rt', expires_at: Date.now() + 3600e3 }),
+    OWNER
+  );
 });
-after(() => { child.kill(); mock.server.close(); hook.close(); db?.close(); });
+after(() => {
+  child.kill();
+  mock.server.close();
+  hook.close();
+  db?.close();
+});
 
 test('phone alerts: config, test message via webhook', async () => {
   const c = await ok('/notify/config');
@@ -68,8 +139,14 @@ test('impressions + CTR from the Reporting API: job, pagination, ingest, idempot
   assert.equal(r1.newReports, 40, 'both pages ingested');
   assert.ok(r1.rows > 100);
   assert.equal(REPORTING.jobs.length, 1, 'existing reach job reused');
-  assert.ok(calls.filter(c => c.path.startsWith('/reporting/')).every(c => c.method === 'GET'), 'Reporting API is read-only');
-  assert.ok(calls.filter(c => c.path.startsWith('/reporting/')).every(c => c.auth === 'Bearer tok'), 'owner token on every call');
+  assert.ok(
+    calls.filter(c => c.path.startsWith('/reporting/')).every(c => c.method === 'GET'),
+    'Reporting API is read-only'
+  );
+  assert.ok(
+    calls.filter(c => c.path.startsWith('/reporting/')).every(c => c.auth === 'Bearer tok'),
+    'owner token on every call'
+  );
   const r2 = await ok(`/reach/${OWNER}/sync`, { method: 'POST' });
   assert.equal(r2.newReports, 0, 'already-ingested reports are skipped');
   assert.equal(REPORTING.jobs.length, 1);
@@ -78,14 +155,18 @@ test('impressions + CTR from the Reporting API: job, pagination, ingest, idempot
   assert.equal(s.daily.length, 28);
   assert.ok(s.totals.impressions > 0 && s.totals.ctr > 1 && s.totals.ctr < 10, 'CTR stored as percent: ' + s.totals.ctr);
   assert.ok(Math.abs(s.baseline.ctr - 4.2) < 0.01, 'usual first-3-day CTR: ' + JSON.stringify(s.baseline));
-  assert.ok(s.lowCtrHighImpressions.some(v => v.video_id === vidId(1)), 'the 1.6% video is flagged');
+  assert.ok(
+    s.lowCtrHighImpressions.some(v => v.video_id === vidId(1)),
+    'the 1.6% video is flagged'
+  );
   const v1 = await ok(`/reach/video/${vidId(1)}`);
   assert.ok(Math.abs(v1.ctr - 1.6) < 1e-6 && v1.impressions > 0);
 });
 
 test('autopilot diagnosis uses real CTR', async () => {
   const d1 = await ok(`/autopilot/diagnose/${vidId(1)}`);
-  assert.equal(d1.kind, 'packaging'); assert.ok(d1.ctrRatio < 0.5 && /people see it but don't click/.test(d1.text));
+  assert.equal(d1.kind, 'packaging');
+  assert.ok(d1.ctrRatio < 0.5 && /people see it but don't click/.test(d1.text));
   const d2 = await ok(`/autopilot/diagnose/${vidId(2)}`);
   assert.notEqual(d2.kind, 'packaging');
   const none = await ok(`/autopilot/diagnose/${(await ok(`/channels/${COMP}/videos?limit=1`)).videos[0].id}`);
@@ -109,11 +190,13 @@ test('suggest mode produces drafts without writes; send routes are removed', asy
 
 test('no clear winner → left unchanged; manual runs keep the guardrails; off-mode respected', async () => {
   const short = await api(`/autopilot/run/${vidId(6)}`, { method: 'POST', body: { force: true } }); // index 6 is a Short in the mock
-  assert.equal(short.status, 409); assert.ok(/Shorts are excluded/.test(short.json.error));
+  assert.equal(short.status, 409);
+  assert.ok(/Shorts are excluded/.test(short.json.error));
   await ok('/settings', { method: 'PUT', body: { autopilot_min_gain: '99' } });
   const [a, twin] = await Promise.all([1, 2].map(() => ok(`/autopilot/run/${vidId(3)}`, { method: 'POST', body: { force: true } })));
   assert.equal(a.id, twin.id, 'concurrent runs on one video share one action');
-  assert.equal(a.status, 'skipped'); assert.ok(/No candidate beat the current package by 99/.test(a.message));
+  assert.equal(a.status, 'skipped');
+  assert.ok(/No candidate beat the current package by 99/.test(a.message));
   await ok('/settings', { method: 'PUT', body: { autopilot_min_gain: '1', autopilot_mode: 'off' } });
   const w = await ok('/radar/watch/run', { method: 'POST' });
   assert.equal(w.autopilot.length, 0);
@@ -126,19 +209,31 @@ test('daily ideas: signals → AI ideas → every title radar-scored → stored,
   assert.equal(r.ideas.length, 3);
   for (const i of r.ideas) {
     assert.equal(i.titles.length, 3);
-    assert.ok(i.titles.every(t => Number.isFinite(t.score)), 'every title scored');
+    assert.ok(
+      i.titles.every(t => Number.isFinite(t.score)),
+      'every title scored'
+    );
     assert.equal(i.best_title, i.titles[0].title, 'best title = highest radar score');
     assert.ok(i.titles[0].score >= i.titles[2].score);
     assert.ok(i.sources.length >= 1 && i.sources[0].type && i.sources[0].text, 'cites evidence');
     assert.ok(i.hook && i.thumb_text);
   }
-  assert.ok(r.ideas.some(i => i.sources.some(s => s.type === 'search term bringing you viewers')), 'owner search terms used');
-  assert.ok(r.ideas.some(i => i.sources.some(s => s.type === 'competitor breakout')), 'competitor breakouts used');
+  assert.ok(
+    r.ideas.some(i => i.sources.some(s => s.type === 'search term bringing you viewers')),
+    'owner search terms used'
+  );
+  assert.ok(
+    r.ideas.some(i => i.sources.some(s => s.type === 'competitor breakout')),
+    'competitor breakouts used'
+  );
   const q = r.ideas.flatMap(i => i.sources).find(s => s.type === 'viewer question');
   assert.ok(q, 'unanswered viewer questions are a signal');
   assert.ok(/\?/.test(q.text) && !/Great video|Thank you/.test(q.text), 'only questions: ' + q.text);
   assert.equal(r.ideas.find(i => i.format === 'short').format, 'short');
-  assert.deepEqual(r.ideas.map(i => i.rank), [1, 2, 3]);
+  assert.deepEqual(
+    r.ideas.map(i => i.rank),
+    [1, 2, 3]
+  );
   assert.ok(await waitFor(() => received.some(m => /^Today's top ideas/.test(m.title) && /1\. /.test(m.message))), 'top 3 sent to the phone');
   const again = await ok(`/ideas/${OWNER}/run`, { method: 'POST', body: { notify: false } });
   assert.equal(again.ideas.length, 0, 'near-repeats of the last 14 days are dropped');
@@ -152,7 +247,7 @@ test('daily ideas: signals → AI ideas → every title radar-scored → stored,
 test('quiet hours hold phone messages, then send them as one digest', async () => {
   const h = new Date().getHours();
   await ok('/settings', { method: 'PUT', body: { notify_quiet: `${h}-${(h + 2) % 24}` } });
-  db.prepare("DELETE FROM radar_ideas").run();
+  db.prepare('DELETE FROM radar_ideas').run();
   await waitFor(() => false, 300); // let earlier fire-and-forget deliveries land
   const n1 = received.length;
   await ok(`/ideas/${OWNER}/run`, { method: 'POST', body: {} });

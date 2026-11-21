@@ -46,69 +46,141 @@ export async function gatherSignals(channelId: string) {
   const signals = [];
   const now = Date.now();
   // 1. Competitor breakouts in the last 30 days: ≥ 2× that channel's median of its last 30 uploads (same bar as the radar).
-  const comps = db.prepare('SELECT c.id, c.title FROM competitor_links l JOIN channels c ON c.id = l.competitor_channel_id WHERE l.owned_channel_id = ?').all(channelId);
+  const comps = db
+    .prepare('SELECT c.id, c.title FROM competitor_links l JOIN channels c ON c.id = l.competitor_channel_id WHERE l.owned_channel_id = ?')
+    .all(channelId);
   const breakouts = [];
   for (const c of comps) {
-    const recent = db.prepare('SELECT id, title, view_count, published_at, is_short FROM videos WHERE channel_id = ? AND is_live = 0 ORDER BY published_at DESC LIMIT 30').all(c.id);
+    const recent = db
+      .prepare('SELECT id, title, view_count, published_at, is_short FROM videos WHERE channel_id = ? AND is_live = 0 ORDER BY published_at DESC LIMIT 30')
+      .all(c.id);
     const med = median(recent.map(v => v.view_count)) || 0;
     if (!med) continue;
     for (const v of recent) {
       const ageD = (now - Date.parse(v.published_at)) / 86400000;
-      if (ageD <= 30 && v.view_count / med >= 2) breakouts.push({ id: v.id, title: v.title, channel: c.title, x: v.view_count / med, ageD, short: !!v.is_short });
+      if (ageD <= 30 && v.view_count / med >= 2)
+        breakouts.push({ id: v.id, title: v.title, channel: c.title, x: v.view_count / med, ageD, short: !!v.is_short });
     }
   }
-  breakouts.sort((a, b) => b.x - a.x).slice(0, 8).forEach((b, i) => signals.push({ id: 'C' + (i + 1), type: 'competitor breakout', text: `"${b.title}" — ${b.channel}, ${b.x.toFixed(1)}× their usual views, ${Math.round(b.ageD)} days old${b.short ? ' (Short)' : ''}`, ref: b.id }));
+  breakouts
+    .sort((a, b) => b.x - a.x)
+    .slice(0, 8)
+    .forEach((b, i) =>
+      signals.push({
+        id: 'C' + (i + 1),
+        type: 'competitor breakout',
+        text: `"${b.title}" — ${b.channel}, ${b.x.toFixed(1)}× their usual views, ${Math.round(b.ageD)} days old${b.short ? ' (Short)' : ''}`,
+        ref: b.id,
+      })
+    );
   // 2. Your own winners (local baseline ≥ 1.75×) in the last 180 days — follow-up material.
   const corpus = buildCorpus(channelId);
-  corpus.filter(r => r.own && r.y !== null && r.y >= 0.8 && now - r.ts <= 180 * 86400000).sort((a, b) => b.y - a.y).slice(0, 5)
+  corpus
+    .filter(r => r.own && r.y !== null && r.y >= 0.8 && now - r.ts <= 180 * 86400000)
+    .sort((a, b) => b.y - a.y)
+    .slice(0, 5)
     .forEach((r, i) => signals.push({ id: 'O' + (i + 1), type: 'your winner', text: `"${r.title}" — ${(2 ** r.y).toFixed(1)}× your usual views`, ref: r.id }));
   // 3. Real YouTube search terms that brought viewers to the channel (owner Analytics).
   if (isAuthorized(channelId)) {
     try {
-      const r = await analyticsQuery(channelId, { ...dateRange(28), metrics: 'views', dimensions: 'insightTrafficSourceDetail', filters: 'insightTrafficSourceType==YT_SEARCH', sort: '-views', maxResults: 15, ttl: 12 * 3600 });
-      r.rows.slice(0, 10).forEach((t, i) => signals.push({ id: 'S' + (i + 1), type: 'search term bringing you viewers', text: `"${t.insightTrafficSourceDetail}" — ${t.views} views in 28 days` }));
-    } catch { /* analytics optional */ }
+      const r = await analyticsQuery(channelId, {
+        ...dateRange(28),
+        metrics: 'views',
+        dimensions: 'insightTrafficSourceDetail',
+        filters: 'insightTrafficSourceType==YT_SEARCH',
+        sort: '-views',
+        maxResults: 15,
+        ttl: 12 * 3600,
+      });
+      r.rows
+        .slice(0, 10)
+        .forEach((t, i) =>
+          signals.push({ id: 'S' + (i + 1), type: 'search term bringing you viewers', text: `"${t.insightTrafficSourceDetail}" — ${t.views} views in 28 days` })
+        );
+    } catch {
+      /* analytics optional */
+    }
   }
   // 4. New autocomplete suggestions since the last check, seeded from your strongest topics.
-  const seeds = [...new Set(corpus.filter(r => r.own && r.y !== null).sort((a, b) => b.y - a.y).slice(0, 3).map(r => titleSeed(r.title)).filter(Boolean))].slice(0, 2);
+  const seeds = [
+    ...new Set(
+      corpus
+        .filter(r => r.own && r.y !== null)
+        .sort((a, b) => b.y - a.y)
+        .slice(0, 3)
+        .map(r => titleSeed(r.title))
+        .filter(Boolean)
+    ),
+  ].slice(0, 2);
   let n = 0;
   for (const seed of seeds) {
     try {
       const r = await risingSuggestions(seed, { country: getSetting('default_country', 'US') });
-      for (const sug of (r.newSuggestions.length ? r.newSuggestions : r.current).slice(0, 4)) signals.push({ id: 'A' + (++n), type: r.newSuggestions.length ? 'new autocomplete suggestion' : 'autocomplete suggestion', text: `"${sug}"` });
-    } catch { /* suggest optional */ }
+      for (const sug of (r.newSuggestions.length ? r.newSuggestions : r.current).slice(0, 4))
+        signals.push({ id: 'A' + ++n, type: r.newSuggestions.length ? 'new autocomplete suggestion' : 'autocomplete suggestion', text: `"${sug}"` });
+    } catch {
+      /* suggest optional */
+    }
   }
   // 5. Questions your viewers keep asking in comments (last 30 days, not yet answered by you), grouped by topic.
   if (getSetting('ideas_comments', '1') === '1') {
     try {
       const threads = await fetchThreads({ channelId, ownerChannelId: channelId, maxPages: Number(getSetting('ideas_comment_pages', 2)) });
       const recentQs = threads.filter(t => t.isQuestion && !t.ownerReplied && !t.isOwner && now - Date.parse(t.published_at || 0) <= 30 * 86400000);
-      clusterQuestions(recentQs).slice(0, 6).forEach((c, i) => {
-        const ex = c.examples.sort((a, b) => b.likes - a.likes)[0];
-        signals.push({ id: 'Q' + (i + 1), type: 'viewer question', text: `"${String(ex.text).replace(/\s+/g, ' ').slice(0, 160)}" — ${c.count} question${c.count > 1 ? 's' : ''} about "${c.topic}"${c.likes ? `, ${c.likes} likes` : ''}`, ref: ex.videoId || null });
-      });
-    } catch { /* comments optional (disabled comments, quota) */ }
+      clusterQuestions(recentQs)
+        .slice(0, 6)
+        .forEach((c, i) => {
+          const ex = c.examples.sort((a, b) => b.likes - a.likes)[0];
+          signals.push({
+            id: 'Q' + (i + 1),
+            type: 'viewer question',
+            text: `"${String(ex.text).replace(/\s+/g, ' ').slice(0, 160)}" — ${c.count} question${c.count > 1 ? 's' : ''} about "${c.topic}"${c.likes ? `, ${c.likes} likes` : ''}`,
+            ref: ex.videoId || null,
+          });
+        });
+    } catch {
+      /* comments optional (disabled comments, quota) */
+    }
   }
   // 6. What competitors' viewers ask for (questions and requests under their best recent videos).
   if (getSetting('ideas_competitor_comments', '1') === '1') {
     try {
       const { competitorAudience } = await import('./research.ts');
       const a = await competitorAudience(channelId);
-      a.clusters.slice(0, 5).forEach((c, i) => { const ex = c.examples[0]; if (ex) signals.push({ id: 'P' + (i + 1), type: "competitor's viewers ask", text: `"${ex.text.slice(0, 160)}" — under ${ex.competitor}'s "${ex.video}"; ${c.count} similar ask${c.count > 1 ? 's' : ''} about "${c.topic}"` }); });
-    } catch { /* optional */ }
+      a.clusters.slice(0, 5).forEach((c, i) => {
+        const ex = c.examples[0];
+        if (ex)
+          signals.push({
+            id: 'P' + (i + 1),
+            type: "competitor's viewers ask",
+            text: `"${ex.text.slice(0, 160)}" — under ${ex.competitor}'s "${ex.video}"; ${c.count} similar ask${c.count > 1 ? 's' : ''} about "${c.topic}"`,
+          });
+      });
+    } catch {
+      /* optional */
+    }
   }
-  const covered = corpus.filter(r => r.own).sort((a, b) => b.ts - a.ts).slice(0, 25).map(r => r.title);
+  const covered = corpus
+    .filter(r => r.own)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 25)
+    .map(r => r.title);
   return { signals, covered };
 }
 
 /** Generate, score and store today's ideas for one owned channel. */
-export async function runDaily(channelId: string, { count = Number(getSetting('ideas_count', 8)), notifyPhone = true }: { count?: number; notifyPhone?: boolean } = {}) {
+export async function runDaily(
+  channelId: string,
+  { count = Number(getSetting('ideas_count', 8)), notifyPhone = true }: { count?: number; notifyPhone?: boolean } = {}
+) {
   const ch = getChannel(channelId);
   if (!ch) throw Object.assign(new Error('Unknown channel'), { status: 404 });
   if (!aiAvailable()) throw Object.assign(new Error('The daily idea list needs the AI provider (Settings → AI).'), { status: 400 });
   const { signals, covered } = await gatherSignals(channelId);
   if (!signals.length) throw Object.assign(new Error('No signals yet: sync your library and track a few competitors first.'), { status: 400 });
-  const prompt = `You are the content strategist for the YouTube channel "${ch.title}" (${String(ch.description || '').replace(/\s+/g, ' ').slice(0, 300)}).
+  const prompt = `You are the content strategist for the YouTube channel "${ch.title}" (${String(ch.description || '')
+    .replace(/\s+/g, ' ')
+    .slice(0, 300)}).
 Propose ${count} video ideas for this channel, grounded ONLY in these signals:
 ${signals.map(s => `[${s.id}] ${s.type}: ${s.text}`).join('\n')}
 
@@ -120,17 +192,26 @@ Return JSON: {"ideas":[{"topic":"...","angle":"why this, why now — one sentenc
   const out = await ai.ask('daily_ideas', prompt, { json: true });
   let ideas = (out.ideas || []).filter(i => Array.isArray(i.titles) && i.titles.some(t => String(t).trim())).slice(0, count);
   // Drop near-repeats of ideas from the last 14 days.
-  const recent = db.prepare("SELECT best_title FROM radar_ideas WHERE channel_id = ? AND day >= date('now', '-14 days')").all(channelId).map(r => tokens(r.best_title));
+  const recent = db
+    .prepare("SELECT best_title FROM radar_ideas WHERE channel_id = ? AND day >= date('now', '-14 days')")
+    .all(channelId)
+    .map(r => tokens(r.best_title));
   ideas = ideas.filter(i => !recent.some(t => i.titles.some(x => jaccard(tokens(x), t) >= 0.6)));
   const scored = [];
   const corpus = buildCorpus(channelId);
   for (const format of ['long', 'short']) {
     const group = ideas.map((idea, i) => ({ idea, i })).filter(x => (x.idea.format === 'short' ? 'short' : 'long') === format);
     if (!group.length) continue;
-    const packages = group.flatMap(({ idea, i }) => idea.titles.slice(0, 3).map((t, j) => ({ key: `${i}-${j}`, title: String(t).trim().slice(0, 100), keyword: idea.keyword || '', hook: idea.hook || null })));
+    const packages = group.flatMap(({ idea, i }) =>
+      idea.titles.slice(0, 3).map((t, j) => ({ key: `${i}-${j}`, title: String(t).trim().slice(0, 100), keyword: idea.keyword || '', hook: idea.hook || null }))
+    );
     const { results } = await scorePackages(channelId, packages, { format, corpus });
     for (const { idea, i } of group) {
-      const titles = idea.titles.slice(0, 3).map((t, j) => results[`${i}-${j}`]).filter(Boolean).map(r => ({ title: r.title, score: r.score, prediction: r.prediction, axes: r.axes }));
+      const titles = idea.titles
+        .slice(0, 3)
+        .map((t, j) => results[`${i}-${j}`])
+        .filter(Boolean)
+        .map(r => ({ title: r.title, score: r.score, prediction: r.prediction, axes: r.axes }));
       titles.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
       if (titles.length) scored.push({ idea, format, titles, best: titles[0] });
     }
@@ -138,14 +219,41 @@ Return JSON: {"ideas":[{"topic":"...","angle":"why this, why now — one sentenc
   scored.sort((a, b) => (b.best.score ?? -1) - (a.best.score ?? -1));
   const day = today();
   const sigById = Object.fromEntries(signals.map(s => [s.id, s]));
-  const ins = db.prepare(`INSERT INTO radar_ideas (channel_id, day, rank, topic, angle, best_title, titles_json, keyword, thumb_text, hook, format, score, predicted_x, p_breakout, band, axes_json, sources_json)
+  const ins =
+    db.prepare(`INSERT INTO radar_ideas (channel_id, day, rank, topic, angle, best_title, titles_json, keyword, thumb_text, hook, format, score, predicted_x, p_breakout, band, axes_json, sources_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  const rows = scored.map((s, k) => ins.run(channelId, day, k + 1, s.idea.topic || '', s.idea.angle || '', s.best.title, JSON.stringify(s.titles), s.idea.keyword || '', s.idea.thumbText || '', s.idea.hook || '', s.format,
-    s.best.score, s.best.prediction?.multiplier ?? null, s.best.prediction?.pBreakout ?? null, s.best.prediction?.band ?? null, JSON.stringify(s.best.axes),
-    JSON.stringify((s.idea.sources || []).map(id => sigById[id]).filter(Boolean))).lastInsertRowid);
+  const rows = scored.map(
+    (s, k) =>
+      ins.run(
+        channelId,
+        day,
+        k + 1,
+        s.idea.topic || '',
+        s.idea.angle || '',
+        s.best.title,
+        JSON.stringify(s.titles),
+        s.idea.keyword || '',
+        s.idea.thumbText || '',
+        s.idea.hook || '',
+        s.format,
+        s.best.score,
+        s.best.prediction?.multiplier ?? null,
+        s.best.prediction?.pBreakout ?? null,
+        s.best.prediction?.band ?? null,
+        JSON.stringify(s.best.axes),
+        JSON.stringify((s.idea.sources || []).map(id => sigById[id]).filter(Boolean))
+      ).lastInsertRowid
+  );
   const list = rows.map(get);
   if (notifyPhone && list.length) {
-    notify({ kind: 'ideas_daily', title: `Today's top ideas for ${ch.title}`, body: list.slice(0, 3).map((x, i) => `${i + 1}. ${x.best_title} — radar ${x.score ?? '—'}${x.predicted_x ? `, ~${x.predicted_x}× usual` : ''}`).join('\n') }).catch(() => {});
+    notify({
+      kind: 'ideas_daily',
+      title: `Today's top ideas for ${ch.title}`,
+      body: list
+        .slice(0, 3)
+        .map((x, i) => `${i + 1}. ${x.best_title} — radar ${x.score ?? '—'}${x.predicted_x ? `, ~${x.predicted_x}× usual` : ''}`)
+        .join('\n'),
+    }).catch(() => {});
   }
   return { day, channelId, signals: signals.length, ideas: list };
 }
@@ -153,18 +261,35 @@ Return JSON: {"ideas":[{"topic":"...","angle":"why this, why now — one sentenc
 export async function runAll() {
   const out = [];
   for (const ch of listChannels('owned')) {
-    try { const r = await runDaily(ch.id); out.push({ channel: ch.title, ideas: r.ideas.length }); }
-    catch (e) { out.push({ channel: ch.title, error: e.message }); }
+    try {
+      const r = await runDaily(ch.id);
+      out.push({ channel: ch.title, ideas: r.ideas.length });
+    } catch (e) {
+      out.push({ channel: ch.title, error: e.message });
+    }
   }
   return out;
 }
 
-export function get(id: number | bigint): import("../db.ts").DbRow {
+export function get(id: number | bigint): import('../db.ts').DbRow {
   const r = db.prepare('SELECT * FROM radar_ideas WHERE id = ?').get(id);
-  return r && { ...r, titles: JSON.parse(r.titles_json), axes: JSON.parse(r.axes_json || 'null'), sources: JSON.parse(r.sources_json || '[]'), titles_json: undefined, axes_json: undefined, sources_json: undefined };
+  return (
+    r && {
+      ...r,
+      titles: JSON.parse(r.titles_json),
+      axes: JSON.parse(r.axes_json || 'null'),
+      sources: JSON.parse(r.sources_json || '[]'),
+      titles_json: undefined,
+      axes_json: undefined,
+      sources_json: undefined,
+    }
+  );
 }
 export function list(channelId: string, { days = 14, status = null }: { days?: number; status?: number } = {}) {
-  const rows = db.prepare(`SELECT id FROM radar_ideas WHERE channel_id = ? AND day >= date('now', ?) ${status ? 'AND status = ?' : "AND status != 'dismissed'"} ORDER BY day DESC, rank`)
+  const rows = db
+    .prepare(
+      `SELECT id FROM radar_ideas WHERE channel_id = ? AND day >= date('now', ?) ${status ? 'AND status = ?' : "AND status != 'dismissed'"} ORDER BY day DESC, rank`
+    )
     .all(...[channelId, `-${days} days`, ...(status ? [status] : [])]);
   return rows.map(r => get(r.id));
 }

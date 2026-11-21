@@ -28,10 +28,16 @@ function findWhisper() {
   const configured = getSetting('whisper_path');
   if (configured && fs.existsSync(configured)) return configured;
   const dirs = (process.env.PATH || '').split(':').concat(['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin']);
-  for (const name of ['whisper-cli', 'whisper-cpp']) for (const d of dirs) { const p = path.join(d, name); if (d && fs.existsSync(p)) return p; }
+  for (const name of ['whisper-cli', 'whisper-cpp'])
+    for (const d of dirs) {
+      const p = path.join(d, name);
+      if (d && fs.existsSync(p)) return p;
+    }
   return null;
 }
-function modelName() { return getSetting('whisper_model_name', 'small.en'); }
+function modelName() {
+  return getSetting('whisper_model_name', 'small.en');
+}
 function modelPath() {
   const configured = getSetting('whisper_model');
   if (configured) return configured;
@@ -39,24 +45,52 @@ function modelPath() {
 }
 
 export function engineStatus() {
-  const bin = findWhisper(), model = modelPath(), ff = toolStatus();
+  const bin = findWhisper(),
+    model = modelPath(),
+    ff = toolStatus();
   const modelReady = fs.existsSync(model);
   return {
-    whisper: bin, model, modelName: modelName(), modelReady, ffmpeg: ff.ffmpeg,
+    whisper: bin,
+    model,
+    modelName: modelName(),
+    modelReady,
+    ffmpeg: ff.ffmpeg,
     ready: !!(bin && ff.ready),
-    hint: !ff.ready ? ff.hint : !bin ? 'Install the free local transcriber: brew install whisper-cpp (or set whisper_path in Settings).' : !modelReady ? `The ${modelName()} speech model (free) downloads automatically the first time it is needed.` : null,
+    hint: !ff.ready
+      ? ff.hint
+      : !bin
+        ? 'Install the free local transcriber: brew install whisper-cpp (or set whisper_path in Settings).'
+        : !modelReady
+          ? `The ${modelName()} speech model (free) downloads automatically the first time it is needed.`
+          : null,
   };
 }
 
 function run(bin, args, { timeoutMs = 60 * 60 * 1000 }: { timeoutMs?: number } = {}) {
   return new Promise<{ out: string; err: string }>((resolve, reject) => {
     const p = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '', err = '';
-    p.stdout.on('data', d => { out += d; if (out.length > 2e6) out = out.slice(-1e6); });
-    p.stderr.on('data', d => { err += d; if (err.length > 2e6) err = err.slice(-1e6); });
-    const t = setTimeout(() => { p.kill('SIGKILL'); reject(new Error(`${path.basename(bin)} timed out`)); }, timeoutMs);
-    p.on('error', e => { clearTimeout(t); reject(e); });
-    p.on('close', code => { clearTimeout(t); code === 0 ? resolve({ out, err }) : reject(new Error(`${path.basename(bin)} exited ${code}: ${err.slice(-400)}`)); });
+    let out = '',
+      err = '';
+    p.stdout.on('data', d => {
+      out += d;
+      if (out.length > 2e6) out = out.slice(-1e6);
+    });
+    p.stderr.on('data', d => {
+      err += d;
+      if (err.length > 2e6) err = err.slice(-1e6);
+    });
+    const t = setTimeout(() => {
+      p.kill('SIGKILL');
+      reject(new Error(`${path.basename(bin)} timed out`));
+    }, timeoutMs);
+    p.on('error', e => {
+      clearTimeout(t);
+      reject(e);
+    });
+    p.on('close', code => {
+      clearTimeout(t);
+      code === 0 ? resolve({ out, err }) : reject(new Error(`${path.basename(bin)} exited ${code}: ${err.slice(-400)}`));
+    });
   });
 }
 
@@ -65,17 +99,20 @@ export async function ensureModel(log: (message: string) => void = () => {}) {
   const file = modelPath();
   if (fs.existsSync(file)) return file;
   if (getSetting('whisper_model')) throw new Error(`whisper_model is set to ${file}, which does not exist.`);
-  if (!downloading) downloading = (async () => {
-    fs.mkdirSync(MODELS_DIR(), { recursive: true });
-    log(`downloading the free ${modelName()} speech model (one time)…`);
-    const res = await fetch(MODEL_URL(modelName()), { signal: AbortSignal.timeout(30 * 60 * 1000) });
-    if (!res.ok) throw new Error(`model download failed (${res.status}) from ${MODEL_URL(modelName())}`);
-    const tmp = file + '.part';
-    fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
-    fs.renameSync(tmp, file);
-    log(`model saved to ${file}`);
-    return file;
-  })().finally(() => { downloading = null; });
+  if (!downloading)
+    downloading = (async () => {
+      fs.mkdirSync(MODELS_DIR(), { recursive: true });
+      log(`downloading the free ${modelName()} speech model (one time)…`);
+      const res = await fetch(MODEL_URL(modelName()), { signal: AbortSignal.timeout(30 * 60 * 1000) });
+      if (!res.ok) throw new Error(`model download failed (${res.status}) from ${MODEL_URL(modelName())}`);
+      const tmp = file + '.part';
+      fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
+      fs.renameSync(tmp, file);
+      log(`model saved to ${file}`);
+      return file;
+    })().finally(() => {
+      downloading = null;
+    });
   return downloading;
 }
 
@@ -91,11 +128,35 @@ export async function transcribeFile(file, { log = () => {} }: { log?: (message:
     await run(st.ffmpeg, ['-y', '-loglevel', 'error', '-i', path.resolve(file), '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', base + '.wav']);
     log('transcribing locally with whisper.cpp…');
     const lang = getSetting('whisper_language', modelName().endsWith('.en') ? 'en' : 'auto');
-    await run(st.whisper, ['-m', model, '-f', base + '.wav', '-l', lang, '-ml', '1', '-sow', '-osrt', '-of', base, '-t', String(Number(getSetting('whisper_threads', 6)))]);
+    await run(st.whisper, [
+      '-m',
+      model,
+      '-f',
+      base + '.wav',
+      '-l',
+      lang,
+      '-ml',
+      '1',
+      '-sow',
+      '-osrt',
+      '-of',
+      base,
+      '-t',
+      String(Number(getSetting('whisper_threads', 6))),
+    ]);
     const srt = fs.readFileSync(base + '.srt', 'utf8');
-    const words = parseSrtGroups(srt).map(w => ({ text: w.text.trim(), start: +w.start.toFixed(3), end: +w.end.toFixed(3) })).filter(w => w.text);
+    const words = parseSrtGroups(srt)
+      .map(w => ({ text: w.text.trim(), start: +w.start.toFixed(3), end: +w.end.toFixed(3) }))
+      .filter(w => w.text);
     if (!words.length) throw new Error('whisper produced no words (silent audio?)');
-    return { words, text: words.map(w => w.text).join(' ').replace(/\s+([,.!?;:])/g, '$1'), duration: words.at(-1).end };
+    return {
+      words,
+      text: words
+        .map(w => w.text)
+        .join(' ')
+        .replace(/\s+([,.!?;:])/g, '$1'),
+      duration: words.at(-1).end,
+    };
   } finally {
     for (const ext of ['.wav', '.srt']) fs.rmSync(base + ext, { force: true });
   }
@@ -111,14 +172,15 @@ export function sourceFileFor(videoId: string) {
   return null;
 }
 
-export function cached(videoId: string): import("../db.ts").DbRow {
+export function cached(videoId: string): import('../db.ts').DbRow {
   const r = db.prepare('SELECT * FROM transcripts WHERE video_id = ?').get(videoId);
   return r ? { ...r, words: JSON.parse(r.words_json), words_json: undefined } : null;
 }
 function store(videoId, source, file, t) {
-  db.prepare(`INSERT INTO transcripts (video_id, source, file, words_json, text, duration) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(video_id) DO UPDATE SET source = excluded.source, file = excluded.file, words_json = excluded.words_json, text = excluded.text, duration = excluded.duration, created_at = datetime('now')`)
-    .run(videoId, source, file, JSON.stringify(t.words), t.text, t.duration ?? null);
+  db.prepare(
+    `INSERT INTO transcripts (video_id, source, file, words_json, text, duration) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(video_id) DO UPDATE SET source = excluded.source, file = excluded.file, words_json = excluded.words_json, text = excluded.text, duration = excluded.duration, created_at = datetime('now')`
+  ).run(videoId, source, file, JSON.stringify(t.words), t.text, t.duration ?? null);
   return cached(videoId);
 }
 
@@ -126,12 +188,25 @@ function store(videoId, source, file, t) {
  * Transcript for an upload: cache → local whisper on its source file → (if allowed) the owner's YouTube captions.
  * opts.needWords: require word-level timing (cutting Shorts) — captions are not good enough for that.
  */
-export async function transcriptFor(videoId: string, { allowCaptions = false, needWords = false, log = () => {} }: { allowCaptions?: boolean; needWords?: boolean; log?: (message: string, ...details: unknown[]) => void } = {}) {
+export async function transcriptFor(
+  videoId: string,
+  {
+    allowCaptions = false,
+    needWords = false,
+    log = () => {},
+  }: { allowCaptions?: boolean; needWords?: boolean; log?: (message: string, ...details: unknown[]) => void } = {}
+) {
   const c = cached(videoId);
   if (c && (!needWords || c.source === 'whisper')) return c;
   const src = sourceFileFor(videoId);
   if (src && engineStatus().ready) return store(videoId, 'whisper', src, await transcribeFile(src, { log }));
-  if (needWords) throw Object.assign(new Error(src ? engineStatus().hint : 'No local source file for this video. Link it in Virality radar → Autopilot → Source file, or publish through Tubescope.'), { status: 400 });
+  if (needWords)
+    throw Object.assign(
+      new Error(
+        src ? engineStatus().hint : 'No local source file for this video. Link it in Virality radar → Autopilot → Source file, or publish through Tubescope.'
+      ),
+      { status: 400 }
+    );
   const v = db.prepare('SELECT channel_id FROM videos WHERE id = ?').get(videoId);
   if (allowCaptions && v && isAuthorized(v.channel_id)) {
     const { ownedTranscript } = await import('./coach.ts');
@@ -145,5 +220,10 @@ export async function transcriptFor(videoId: string, { allowCaptions = false, ne
 /** The first `seconds` of speech — what a viewer hears before deciding to stay. */
 export function hookText(t, seconds = 30) {
   if (!t?.words?.length) return '';
-  return t.words.filter(w => w.start < seconds).map(w => w.text).join(' ').replace(/\s+([,.!?;:])/g, '$1').slice(0, 900);
+  return t.words
+    .filter(w => w.start < seconds)
+    .map(w => w.text)
+    .join(' ')
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .slice(0, 900);
 }
