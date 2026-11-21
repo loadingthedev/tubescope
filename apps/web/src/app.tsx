@@ -10,6 +10,7 @@ import { Dashboard } from './dashboard';
 import { Channels } from './channels';
 import { Library, VideoDetail } from './library';
 import { Settings } from './settings';
+import { Health } from './health';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
@@ -31,7 +32,10 @@ const navigation = [
   { label: 'Watch', items: [{ to: '/competitors', label: 'Competitors', glyph: '◉' }] },
   {
     label: 'System',
-    items: [{ to: '/settings', label: 'Settings', glyph: '⚙' }],
+    items: [
+      { to: '/settings', label: 'Settings', glyph: '⚙' },
+      { to: '/health', label: 'Health', glyph: '♡' },
+    ],
   },
 ];
 
@@ -117,6 +121,7 @@ export function App() {
             <Route path="/library" element={<Library />} />
             <Route path="/library/:videoId" element={<VideoDetail />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/health" element={<Health />} />
             <Route path="*" element={<ComingSoon name="Page not found" />} />
           </Routes>
         </main>
