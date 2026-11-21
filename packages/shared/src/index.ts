@@ -107,6 +107,9 @@ export interface KeywordCompetitionResponse {
   source: string;
 }
 export interface OutlierVideo extends Video {
+  channelMedianViews?: number | null;
+  baselineSample?: number;
+  outlierX?: number | null;
   channel_subs: number;
   channel_videos: number;
   channel_thumbnail?: string;
@@ -116,6 +119,7 @@ export interface OutlierVideo extends Video {
   breakout_score: number;
 }
 export interface OutlierSearchResponse {
+  baselinePartial?: boolean;
   query: string;
   sampleSize: number;
   results: OutlierVideo[];
@@ -147,4 +151,25 @@ export interface CompetitorComparisonResponse {
   days: number;
   channels: CompetitorMetrics[];
   note: string;
+}
+
+export interface LocalOutlierVideo extends Video {
+  channel_subs: number;
+  baseline_median: number;
+  outlier_x: number;
+  velocity_x: number;
+  vpd: number;
+  sample: number;
+  subs_ratio: number | null;
+}
+export interface FeedVideo extends Video {
+  channel_subs: number;
+}
+export interface CompetitorAlert {
+  id: number;
+  title: string;
+  kind: string;
+  read: number;
+  created_at: string;
+  payload: { videoId?: string; channelId?: string };
 }
