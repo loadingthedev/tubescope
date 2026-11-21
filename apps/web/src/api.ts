@@ -8,14 +8,13 @@ export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T>
   return body as T;
 }
 
-export async function mutateJson(path: string, method: 'POST' | 'DELETE', body?: unknown): Promise<void> {
+export async function mutateJson<T = void>(path: string, method: 'POST' | 'DELETE', body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method,
     headers: body === undefined ? {} : { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) {
-    const data: unknown = await response.json();
-    throw new Error(data && typeof data === 'object' && 'error' in data ? String(data.error) : response.statusText);
-  }
+  const data: unknown = await response.json();
+  if (!response.ok) throw new Error(data && typeof data === 'object' && 'error' in data ? String(data.error) : response.statusText);
+  return data as T;
 }

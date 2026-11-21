@@ -14,7 +14,7 @@ import type {
   PerformanceSegment,
   Video,
 } from '@tubescope/shared';
-import { getJson } from './api';
+import { getJson, mutateJson } from './api';
 import { ChannelSelect, PageHeader, QueryError, StatCard, Table, useOwnedChannel } from './components/research';
 import { duration, format, times, timestamp } from './components/format';
 import { LineChart } from './components/line-chart';
@@ -330,17 +330,7 @@ function ChannelDashboard({ channel }: { channel: Channel }) {
   const ideas = useDashboardQuery<IdeasResponse>(id, `/ideas/${id}?days=2`);
   const analytics = useDashboardQuery<AnalyticsOverviewResponse>(id, `/analytics/${id}/overview?days=28`, channel.authorized);
   const sync = useMutation({
-    mutationFn: async () => {
-      const response = await fetch(`/api/channels/${id}/sync`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ force: true }),
-      });
-      const body: unknown = await response.json();
-      const data = body as ChannelSyncResponse & { error?: string };
-      if (!response.ok) throw new Error(data.error || response.statusText);
-      return data;
-    },
+    mutationFn: () => mutateJson<ChannelSyncResponse>(`/channels/${id}/sync`, 'POST', { force: true }),
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['channels'] }),

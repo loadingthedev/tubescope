@@ -2,7 +2,7 @@ import { format } from './format';
 
 export function LineChart({ points, label }: { points: { day: string; value: number }[]; label: string }) {
   const data = points.filter(point => Number.isFinite(point.value));
-  if (!data.length) return <p className="muted">No chart data yet. Snapshots build daily.</p>;
+  if (data.length < 2) return <p className="muted">Not enough history yet: the chart appears after two days of snapshots.</p>;
   const min = Math.min(0, ...data.map(point => point.value));
   const max = Math.max(...data.map(point => point.value));
   const x = (index: number) => 88 + (index / Math.max(1, data.length - 1)) * 500;
