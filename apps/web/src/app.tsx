@@ -1,3 +1,4 @@
+import { Packaging } from './packaging';
 import { Analytics } from './analytics';
 import { useQuery } from '@tanstack/react-query';
 import { NavLink, Route, Routes } from 'react-router';
@@ -26,6 +27,7 @@ const navigation = [
       { to: '/channels', label: 'Channels', glyph: '◉' },
       { to: '/library', label: 'Video library', glyph: '▤' },
       { to: '/analytics', label: 'Analytics', glyph: '▥' },
+      { to: '/packaging', label: 'Packaging', glyph: '▧' },
     ],
   },
   {
@@ -130,6 +132,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/analytics" element={<Analytics />} />
+            <Route path="/packaging" element={<Packaging />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
