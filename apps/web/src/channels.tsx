@@ -2,13 +2,15 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Spinner } from '@/components/ui/spinner';
-import { SearchX } from 'lucide-react';
+import { ChevronDown, Plus, SearchX } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Field, FieldLabel, FieldGroup } from '@/components/ui/field';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +29,7 @@ export function Channels() {
   const [maxVideos, setMaxVideos] = useState(200);
   const [confirm, setConfirm] = useState('');
   const [notice, setNotice] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
   const action = useMutation({
     mutationFn: async ({ path, method = 'POST', body }: { path: string; method?: 'POST' | 'DELETE'; body?: unknown }) => {
       if (path === '/oauth/url') {
@@ -38,6 +41,7 @@ export function Channels() {
         const result = await mutateJson<Channel>(path, method, body);
         if (result.kind === 'owned') channel.select(result.id);
         setInput('');
+        setAddOpen(false);
         setNotice('');
         toast.success(`Added ${result.title}.`);
       } else if (path.endsWith('/sync')) {
@@ -92,13 +96,21 @@ export function Channels() {
                 {items.map(item => (
                   <tr key={item.id}>
                     <th scope="row">
-                      <a href={`https://www.youtube.com/channel/${encodeURIComponent(item.id)}`} target="_blank" rel="noreferrer">
-                        {item.title}
-                      </a>
-                      <small className="block text-xs text-muted-foreground">
-                        {item.handle || item.id}
-                        {item.oauth_email ? ` · ${item.oauth_email}` : ''}
-                      </small>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="size-9">
+                          {item.thumbnail ? <AvatarImage src={item.thumbnail} alt="" /> : null}
+                          <AvatarFallback className="text-xs">{(item.title || item.id).slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex min-w-0 flex-col">
+                          <a href={`https://www.youtube.com/channel/${encodeURIComponent(item.id)}`} target="_blank" rel="noreferrer">
+                            {item.title}
+                          </a>
+                          <small className="text-xs font-normal text-muted-foreground">
+                            {item.handle || item.id}
+                            {item.oauth_email ? ` · ${item.oauth_email}` : ''}
+                          </small>
+                        </div>
+                      </div>
                     </th>
                     <td className="num">{format(item.subscriber_count)}</td>
                     <td className="num">{format(item.view_count)}</td>
@@ -204,60 +216,74 @@ export function Channels() {
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Add by ID, handle or URL</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <form onSubmit={submit}>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="channels-field-1">Channel ID, handle or URL</FieldLabel>
-                  <Input
-                    id="channels-field-1"
-                    required
-                    value={input}
-                    onChange={event => setInput(event.target.value)}
-                    placeholder="UC…, @handle, channel or video URL"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="channels-field-2">Kind</FieldLabel>
-                  <ToggleGroup
-                    id="channels-field-2"
-                    aria-label="Kind"
-                    type="single"
-                    variant="outline"
-                    value={kind}
-                    onValueChange={value => {
-                      if (value) setKind(value);
-                    }}
-                  >
-                    <ToggleGroupItem value="owned">Owned (workspace)</ToggleGroupItem>
-                    <ToggleGroupItem value="competitor">Competitor (reference)</ToggleGroupItem>
-                  </ToggleGroup>
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="channels-field-3">Max videos</FieldLabel>
-                  <Input
-                    id="channels-field-3"
-                    type="number"
-                    min="50"
-                    max="2000"
-                    step="50"
-                    required
-                    value={maxVideos}
-                    onChange={event => setMaxVideos(Number(event.target.value))}
-                  />
-                </Field>
-                <Button disabled={action.isPending || !input.trim()}>
-                  {action.isPending ? <Spinner data-icon="inline-start" /> : null}
-                  {action.isPending ? 'Working…' : 'Add & sync'}
-                </Button>
-              </FieldGroup>
-            </form>
-          </CardContent>
-        </Card>
+        <Collapsible open={addOpen} onOpenChange={setAddOpen} asChild>
+          <Card>
+            <CardHeader>
+              <CardTitle>Add by ID, handle or URL</CardTitle>
+              <CardDescription>Track any public channel as yours or as a competitor, no Google sign-in needed.</CardDescription>
+              <CardAction>
+                <CollapsibleTrigger asChild>
+                  <Button variant={addOpen ? 'ghost' : 'outline'} size="sm" className="group">
+                    {addOpen ? null : <Plus data-icon="inline-start" />}
+                    {addOpen ? 'Close' : 'Add channel'}
+                    <ChevronDown data-icon="inline-end" className="transition-transform group-data-[state=open]:rotate-180" />
+                  </Button>
+                </CollapsibleTrigger>
+              </CardAction>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="flex flex-col gap-4">
+                <form onSubmit={submit}>
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="channels-field-1">Channel ID, handle or URL</FieldLabel>
+                      <Input
+                        id="channels-field-1"
+                        required
+                        value={input}
+                        onChange={event => setInput(event.target.value)}
+                        placeholder="UC…, @handle, channel or video URL"
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="channels-field-2">Kind</FieldLabel>
+                      <ToggleGroup
+                        id="channels-field-2"
+                        aria-label="Kind"
+                        type="single"
+                        variant="outline"
+                        value={kind}
+                        onValueChange={value => {
+                          if (value) setKind(value);
+                        }}
+                      >
+                        <ToggleGroupItem value="owned">Owned (workspace)</ToggleGroupItem>
+                        <ToggleGroupItem value="competitor">Competitor (reference)</ToggleGroupItem>
+                      </ToggleGroup>
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="channels-field-3">Max videos</FieldLabel>
+                      <Input
+                        id="channels-field-3"
+                        type="number"
+                        min="50"
+                        max="2000"
+                        step="50"
+                        required
+                        value={maxVideos}
+                        onChange={event => setMaxVideos(Number(event.target.value))}
+                      />
+                    </Field>
+                    <Button disabled={action.isPending || !input.trim()}>
+                      {action.isPending ? <Spinner data-icon="inline-start" /> : null}
+                      {action.isPending ? 'Working…' : 'Add & sync'}
+                    </Button>
+                  </FieldGroup>
+                </form>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
       {notice ? <p role="status">{notice}</p> : null}
       {action.isError ? (
