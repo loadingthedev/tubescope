@@ -104,7 +104,14 @@ export interface KeywordCompetitionResponse {
   components: { smallChannelsRanking: number; freshContentRanking: number; titleGap: number; demandProxy: number };
   formula: string;
   results: CompetitionVideo[];
+  relatedTags: RelatedTag[];
   source: string;
+}
+export interface RelatedTag {
+  tag: string;
+  channels: number;
+  videos: number;
+  views: number;
 }
 export interface OutlierVideo extends Video {
   channelMedianViews?: number | null;

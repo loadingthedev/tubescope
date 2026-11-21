@@ -1,7 +1,7 @@
 import { format } from './components/format';
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { KeywordCompetitionResponse, KeywordDemandResponse, KeywordExploreResponse, SettingsResponse } from '@tubescope/shared';
+import type { KeywordCompetitionResponse, KeywordDemandResponse, KeywordExploreResponse, RelatedTag, SettingsResponse } from '@tubescope/shared';
 import { getJson } from './api';
 
 import { PageHeader, StatCard, Table, QueryError } from './components/research';
@@ -27,7 +27,46 @@ function Suggestions({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function Competition({ data }: { data: KeywordCompetitionResponse }) {
+function RelatedTags({ tags, sampleSize, onExplore }: { tags: RelatedTag[]; sampleSize: number; onExplore: (keyword: string) => void }) {
+  return (
+    <section className="related-tags" aria-label="Related keywords from tags">
+      <div className="section-heading">
+        <h2>Keywords the top videos use</h2>
+        <span>{tags.length}</span>
+      </div>
+      {tags.length ? (
+        <Table caption={`Tags shared by at least two channels in the top ${sampleSize} results`}>
+          <thead>
+            <tr>
+              <th scope="col">Keyword</th>
+              <th scope="col">Channels</th>
+              <th scope="col">Videos</th>
+              <th scope="col">Their views</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tags.map(t => (
+              <tr key={t.tag}>
+                <td>
+                  <button type="button" className="text-button" onClick={() => onExplore(t.tag)}>
+                    {t.tag}
+                  </button>
+                </td>
+                <td>{t.channels}</td>
+                <td>{t.videos}</td>
+                <td>{format(t.views)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      ) : (
+        <p className="muted">No tag is shared by two or more ranking channels for this seed.</p>
+      )}
+    </section>
+  );
+}
+
+function Competition({ data, onExplore }: { data: KeywordCompetitionResponse; onExplore: (keyword: string) => void }) {
   return (
     <section className="competition" aria-label="Competition evidence">
       <div className="section-heading">
@@ -85,6 +124,7 @@ function Competition({ data }: { data: KeywordCompetitionResponse }) {
         </tbody>
       </Table>
       {!data.results.length ? <p className="muted">No results returned for this seed.</p> : null}
+      <RelatedTags tags={data.relatedTags} sampleSize={data.sampleSize} onExplore={onExplore} />
       <details className="method">
         <summary>Scoring method & source</summary>
         <p>{data.formula}</p>
@@ -170,11 +210,13 @@ function KeywordResults({
   research,
   showCompetition,
   requestEvidence,
+  onExplore,
 }: {
   search: Search;
   research: Research;
   showCompetition: boolean;
   requestEvidence: () => void;
+  onExplore: (keyword: string) => void;
 }) {
   const { explore, demand, competition } = research;
   return (
@@ -197,7 +239,7 @@ function KeywordResults({
         </button>
       </div>
       {showCompetition && competition.isError ? <QueryError error={competition.error} retry={() => void competition.refetch()} /> : null}
-      {showCompetition && competition.data ? <Competition data={competition.data} /> : null}
+      {showCompetition && competition.data ? <Competition data={competition.data} onExplore={onExplore} /> : null}
     </>
   );
 }
@@ -217,6 +259,12 @@ export function Keywords() {
       void research.explore.refetch();
       void research.demand.refetch();
     } else setSearch({ seed: seed.trim(), country });
+  }
+  function exploreKeyword(keyword: string) {
+    setSeed(keyword);
+    setShowCompetition(false);
+    setSearch({ seed: keyword, country: settings.data?.default_country || 'US' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   return (
@@ -257,6 +305,7 @@ export function Keywords() {
             setShowCompetition(true);
             if (showCompetition && research.competition.isError) void research.competition.refetch();
           }}
+          onExplore={exploreKeyword}
         />
       )}
     </div>

@@ -62,6 +62,33 @@ export async function keywordExplore(
 }
 
 /** Competition evidence for a keyword using a real search.list sample. ~102 quota units, cached 24h. */
+// Tags shared by the videos that rank for a keyword: vidIQ-style "related keywords" with no extra API calls.
+// Ranked by distinct channels so one channel stuffing tags can't dominate.
+export function relatedTags(
+  videos: { channel_id: string; view_count: number; tags?: string[] }[],
+  keyword: string,
+  { minChannels = 2, limit = 30 }: { minChannels?: number; limit?: number } = {}
+) {
+  const seed = keyword.trim().toLowerCase();
+  const byTag = new Map<string, { channels: Set<string>; videos: number; views: number }>();
+  for (const v of videos) {
+    const tags = new Set((v.tags || []).map(t => t.trim().toLowerCase().replace(/\s+/g, ' ')));
+    for (const tag of tags) {
+      if (tag.length < 3 || tag.length > 60 || tag === seed) continue;
+      const row = byTag.get(tag) || { channels: new Set(), videos: 0, views: 0 };
+      row.channels.add(v.channel_id);
+      row.videos++;
+      row.views += v.view_count || 0;
+      byTag.set(tag, row);
+    }
+  }
+  return [...byTag]
+    .map(([tag, r]) => ({ tag, channels: r.channels.size, videos: r.videos, views: r.views }))
+    .filter(r => r.channels >= minChannels)
+    .sort((a, b) => b.channels - a.channels || b.videos - a.videos || b.views - a.views)
+    .slice(0, limit);
+}
+
 export async function keywordCompetition(
   keyword: string,
   { country = 'US', lang = 'en', sample = 25 }: { country?: string; lang?: string; sample?: number } = {}
@@ -119,6 +146,7 @@ export async function keywordCompetition(
     components,
     formula: '0.35×small-channels-ranking + 0.20×fresh-content-ranking + 0.15×title-gap + 0.30×demand-proxy (log10 median views of the top results ÷ 7)',
     results: rows.sort((a, b) => b.view_count - a.view_count),
+    relatedTags: relatedTags(rows, keyword),
     source: `search.list top ${sample} for "${keyword}" in ${country} + videos.list + channels.list`,
   };
 }

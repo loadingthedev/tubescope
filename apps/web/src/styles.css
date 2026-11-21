@@ -962,3 +962,6 @@ select {
 .research-page .metrics {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
+.related-tags {
+  margin-top: 40px;
+}

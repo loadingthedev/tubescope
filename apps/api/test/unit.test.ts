@@ -10,7 +10,7 @@ const { parseDuration, isShort } = await import('../src/youtube/client.ts');
 const { analyzeTitle, analyzeDescription, validateChapters } = await import('../src/services/packaging.ts');
 const { median, pct } = await import('../src/services/stats.ts');
 const { parseCsv, importStudioCsv, earningsScenario, toCsv } = await import('../src/services/misc.ts');
-const { titlePatterns, formatLabel, scoreOutliers } = await import('../src/services/discovery.ts');
+const { titlePatterns, formatLabel, scoreOutliers, relatedTags } = await import('../src/services/discovery.ts');
 const { parseSrt } = await import('../src/services/coach.ts');
 const { parseJson } = await import('../src/services/ai.ts');
 const { termFrequencies, clusterQuestions, filterThreads, pickWinner } = await import('../src/services/comments.ts');
@@ -209,4 +209,23 @@ test('tag filter drops other creators and title fragments', async () => {
 test('power words include horror vocabulary', () => {
   const a = analyzeTitle('Lizzie Borden House: 4 Terrifying Signs in 1 Night', { keyword: 'lizzie borden house' });
   assert.ok(a.checks.find(c => c.name.startsWith('Uses 1–2 emotional/power words')).pass);
+});
+
+test('related tags rank by distinct channels and skip the seed and one-channel tags', () => {
+  const tags = relatedTags(
+    [
+      { channel_id: 'a', view_count: 100, tags: ['Victorian Jobs', 'Victorian  Era', 'chimney sweep', 'spam tag'] },
+      { channel_id: 'a', view_count: 50, tags: ['spam tag', 'victorian era'] },
+      { channel_id: 'b', view_count: 1000, tags: ['victorian era', 'Chimney Sweep', 'x'] },
+      { channel_id: 'c', view_count: 10, tags: ['victorian era'] },
+    ],
+    'victorian jobs'
+  );
+  assert.deepEqual(
+    tags.map(t => [t.tag, t.channels, t.videos, t.views]),
+    [
+      ['victorian era', 3, 4, 1160],
+      ['chimney sweep', 2, 2, 1100],
+    ]
+  );
 });
