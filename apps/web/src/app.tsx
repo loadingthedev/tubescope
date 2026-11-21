@@ -1,3 +1,4 @@
+import { Calculators } from './calculators';
 import { Portfolio } from './portfolio';
 import { Boards } from './boards';
 import { Comments } from './comments';
@@ -43,6 +44,7 @@ const navigation = [
       { to: '/index', label: 'Outlier index', glyph: '▦' },
       { to: '/trending', label: 'Trending & niches', glyph: '⌁' },
       { to: '/boards', label: 'Boards & blueprints', glyph: '▦' },
+      { to: '/calculators', label: 'Calculators', glyph: '≡' },
     ],
   },
   {
@@ -142,6 +144,7 @@ export function App() {
             <Route path="/comments" element={<Comments />} />
             <Route path="/boards" element={<Boards />} />
             <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/calculators" element={<Calculators />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
