@@ -12,6 +12,7 @@ import { watchTick, calibrate, buildCorpus } from '../services/radar.ts';
 import * as reach from '../services/reach.ts';
 import * as ideas from '../services/ideas.ts';
 import * as portfolio from '../services/portfolio.ts';
+import { publishWeeklyReport } from '../services/weekly-report.ts';
 import { aiAvailable } from '../services/radar.ts';
 
 let running = null;
@@ -139,6 +140,17 @@ export function startAutopilotJobs(tz) {
         .catch(e => console.error('[reach]', e.message)); // the Reporting API keeps history: tomorrow's run fills any gap
     },
     { tz, label: 'CTR sync' }
+  );
+  jobs.schedule(
+    'notion_report',
+    getSetting('notion_report_cron', '30 8 * * 1'),
+    async () => {
+      if (getSetting('notion_report_enabled', '1') !== '1') return;
+      const result = await publishWeeklyReport();
+      if ('url' in result) console.log('[notion_report]', result.url);
+      return result;
+    },
+    { tz, label: 'Weekly Notion report' }
   );
   // Weekly summary Monday morning.
   jobs.schedule('weekly', getSetting('weekly_summary_cron', '10 8 * * 1'), () => portfolio.weeklySummary(), { tz, label: 'Weekly summary' });

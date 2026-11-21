@@ -3,6 +3,7 @@
 // written through /api/config. `local: true` keys point at programs or network exposure on the Mac: changing them would
 // let whoever controls the setting run programs or open ports, so only a client on the Mac itself may change them.
 import cron from 'node-cron';
+import { DEFAULT_REPORTS_PAGE_ID } from './notion.ts';
 import { getSetting, setSetting, allSettings } from '../db.ts';
 
 interface SettingSchema {
@@ -109,6 +110,11 @@ export const SCHEMA = [
   S('elevenlabs_model', 'voiceover', 'string', 'ElevenLabs model id (blank = default).'),
   S('higgsfield_api_key', 'voiceover', 'secret', 'Higgsfield API key (optional AI thumbnail backgrounds).'),
   S('higgsfield_api_secret', 'voiceover', 'secret', 'Higgsfield API secret.'),
+  // weekly Notion report
+  S('notion_token', 'notion', 'secret', 'Internal integration token for our own Notion weekly reports page.', { local: true }),
+  S('notion_reports_page_id', 'notion', 'string', 'Parent page shared with the internal integration.', { default: DEFAULT_REPORTS_PAGE_ID, local: true }),
+  S('notion_report_cron', 'schedule', 'cron', 'Weekly report to our own Notion workspace.', { default: '30 8 * * 1' }),
+  bool('notion_report_enabled', 'notion', 'Publish the weekly Notion report when configured.', '1'),
   // notifications
   S('notify_imessage_to', 'notifications', 'string', 'Phone number or Apple ID that gets alerts by iMessage (sent from this Mac).', { local: true }),
   S('notify_ntfy_topic', 'notifications', 'secret', 'ntfy topic for push alerts (free ntfy app).', { local: true }),

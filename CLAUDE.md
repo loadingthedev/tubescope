@@ -4,7 +4,8 @@ Private MIT fork, taken at upstream commit 3503111. See README.md for upstream c
 
 ## Rules
 
-- Read-only. This app never uploads, edits, schedules or deletes videos, never changes titles, tags, thumbnails or privacy, never replies to comments and never posts to any platform. The owner posts by hand. Don't add write features back.
+- The only external write allowed is the weekly report page in our own Notion workspace (Tubescope weekly reports).
+- Read-only. This app never uploads, edits, schedules or deletes videos, never changes titles, tags, thumbnails or privacy, never replies to comments and never posts to any platform except the weekly Notion report above. The owner posts by hand. Don't add write features back.
 - Don't pull or merge from `upstream`. Upstream is a single, new author: copy an idea by hand only after reading the code.
 - New features take inspiration from vidIQ (what it shows and how), built on free sources: YouTube Data API, YouTube Analytics API (read-only scopes), autocomplete, Google Trends.
 - Estimates must be labelled as estimates. Never present a made-up number as data (no fake search volume).

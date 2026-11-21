@@ -97,3 +97,7 @@ Feature ideas are inspired by vidIQ. Tubescope is not affiliated with vidIQ, You
 ## Licence
 
 MIT. See [LICENSE](LICENSE) for both copyright notices and the licence terms.
+
+## Weekly reports in Notion
+
+Create a Notion internal integration, then share **Tubescope weekly reports** with it. Paste its token into `notion_token` in Settings (or set `TUBESCOPE_NOTION_TOKEN`). `notion_reports_page_id` defaults to `41fb9c2f64fc80d9ae97f2b000b7151d`. The report runs Monday at 08:30 in your configured `timezone`; use `notion_report_cron` or `notion_report_enabled` to change this (restart after schedule changes). Preview with `GET /api/reports/weekly` or the MCP `weekly_report` tool. Publish with `POST /api/reports/weekly/notion`; `{ "dryRun": true }` previews without contacting Notion. Reports use local data only and reuse an existing child page with the same week title.
