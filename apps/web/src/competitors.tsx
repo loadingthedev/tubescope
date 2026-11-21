@@ -45,15 +45,19 @@ function Comparison({
             <th scope="col">Metric</th>
             {data.channels.map(channel => (
               <th key={channel.id} scope="col">
-                {channel.thumbnail ? <img className="avatar" src={channel.thumbnail} alt="" width="32" height="32" /> : null}
-                {channel.title}
-                {channel.id === ownedId ? (
-                  <span className="badge accent">You</span>
-                ) : (
-                  <button type="button" className="text-button" disabled={pending} onClick={() => untrack(channel.id)}>
-                    Untrack<span className="sr-only"> {channel.title}</span>
-                  </button>
-                )}
+                <div className="channel-head">
+                  <span>
+                    {channel.thumbnail ? <img className="avatar" src={channel.thumbnail} alt="" width="32" height="32" /> : null}
+                    {channel.title}
+                  </span>
+                  {channel.id === ownedId ? (
+                    <span className="badge accent">You</span>
+                  ) : (
+                    <button type="button" className="text-button" disabled={pending} onClick={() => untrack(channel.id)}>
+                      Untrack<span className="sr-only"> {channel.title}</span>
+                    </button>
+                  )}
+                </div>
               </th>
             ))}
           </tr>

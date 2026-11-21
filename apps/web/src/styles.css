@@ -683,3 +683,16 @@ select {
     transition: none;
   }
 }
+
+.channel-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.375rem;
+  min-width: 9rem;
+}
+.channel-head > span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
