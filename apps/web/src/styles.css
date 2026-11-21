@@ -802,3 +802,94 @@ select {
     gap: 0;
   }
 }
+
+/* Local channel management and system pages. */
+.channels-page,
+.library-page,
+.settings-page,
+.health-page {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+.channels-page > .dashboard-card,
+.health-page > .dashboard-card,
+.settings-page fieldset {
+  margin-top: 24px;
+}
+.settings-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.settings-fields label,
+.setting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.settings-fields input,
+.settings-fields select {
+  width: 100%;
+}
+.setting-field small {
+  line-height: 1.6;
+}
+.setting-field select[multiple] {
+  min-height: 150px;
+}
+.settings-page legend {
+  padding: 0 10px;
+  text-transform: capitalize;
+  font-weight: 600;
+}
+.channel-actions,
+.pagination {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.channel-actions button,
+.pagination button {
+  cursor: pointer;
+}
+.pagination {
+  margin-top: 24px;
+  justify-content: space-between;
+}
+.video-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.metadata-value {
+  max-width: 360px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.check-list {
+  list-style: none;
+  padding: 0;
+}
+.check-list li {
+  padding: 12px 0;
+  border-bottom: 1px solid #323a48;
+}
+.sidebar nav {
+  overflow-y: auto;
+}
+.sidebar .nav-label {
+  margin-top: 22px;
+  margin-bottom: 8px;
+}
+.settings-fields input {
+  background: #161a21;
+  color: #e7eaf0;
+  border: 1px solid #323a48;
+  border-radius: 6px;
+  padding: 10px;
+}
+.library-page .filters {
+  margin-block: 24px;
+}

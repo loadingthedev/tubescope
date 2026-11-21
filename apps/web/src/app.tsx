@@ -9,10 +9,22 @@ import { Dashboard } from './dashboard';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
-  { to: '/', label: 'Dashboard', glyph: '◫' },
-  { to: '/keywords', label: 'Keywords', glyph: '⌕' },
-  { to: '/outliers', label: 'Outliers', glyph: '↗' },
-  { to: '/competitors', label: 'Competitors', glyph: '◉' },
+  {
+    label: 'Desk',
+    items: [{ to: '/', label: 'Dashboard', glyph: '◫' }],
+  },
+  {
+    label: 'Research',
+    items: [
+      { to: '/keywords', label: 'Keywords', glyph: '⌕' },
+      { to: '/outliers', label: 'Outliers', glyph: '↗' },
+    ],
+  },
+  { label: 'Watch', items: [{ to: '/competitors', label: 'Competitors', glyph: '◉' }] },
+  {
+    label: 'System',
+    items: [],
+  },
 ];
 
 function Quota() {
@@ -63,13 +75,18 @@ export function App() {
           </span>
           Tubescope<span className="preview-label">Preview</span>
         </a>
-        <p className="nav-label">WORKSPACE</p>
+
         <nav aria-label="Main navigation">
-          {navigation.map(item => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <span aria-hidden="true">{item.glyph}</span>
-              {item.label}
-            </NavLink>
+          {navigation.map(group => (
+            <div key={group.label}>
+              <p className="nav-label">{group.label}</p>
+              {group.items.map(item => (
+                <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                  <span aria-hidden="true">{item.glyph}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar-foot">

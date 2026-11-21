@@ -8,7 +8,7 @@ export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T>
   return body as T;
 }
 
-export async function mutateJson<T = void>(path: string, method: 'POST' | 'DELETE', body?: unknown): Promise<T> {
+export async function mutateJson<T = void>(path: string, method: 'POST' | 'DELETE' | 'PUT', body?: unknown): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method,
     headers: body === undefined ? {} : { 'content-type': 'application/json' },

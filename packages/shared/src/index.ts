@@ -226,3 +226,75 @@ export interface ChannelSyncResponse {
   synced: number;
   metadataChanges: number;
 }
+
+export interface OAuthUrlResponse {
+  url: string;
+}
+export interface SettingField {
+  key: string;
+  group: string;
+  type: string;
+  description: string;
+  default?: string | number | boolean;
+  min?: number;
+  max?: number;
+  local?: boolean;
+  values?: string[];
+  pattern?: string;
+  value: string | number | boolean;
+  set: boolean;
+  isDefault: boolean;
+}
+export interface ConfigResponse {
+  groups: string[];
+  settings: SettingField[];
+}
+export interface ChecklistCheck {
+  name: string;
+  pass: boolean;
+  detail: string;
+}
+export interface VideoChecklistResponse {
+  score: number;
+  items: { item: string; pass: boolean; detail: string }[];
+  title: { score: number; checks: ChecklistCheck[]; note: string };
+  description: { score: number; checks: ChecklistCheck[] };
+}
+export interface VideoDetailResponse extends Video {
+  format: string;
+  history: { day: string; views: number; likes: number; comments: number }[];
+  metadataHistory: { id: number; observed_at: string; field: string; old_value: string | null; new_value: string | null }[];
+}
+export interface JobStatus {
+  name: string;
+  label: string;
+  schedule: string;
+  running: boolean;
+  lastRun: string | null;
+  lastOk: string | null;
+  lastError: string | null;
+  failuresInARow: number;
+  due: string | null;
+}
+export interface HealthResponse {
+  at: string;
+  status: string;
+  errors: number;
+  warnings: number;
+  items: { id: string; level: string; ok: boolean; title: string; detail: string; fix: string | null }[];
+  jobs: JobStatus[];
+}
+export interface BackupsResponse {
+  dir: string;
+  backups: { file: string; day: string; bytes: number; at: string }[];
+}
+export interface BackupCreatedResponse {
+  created: string;
+  bytes: number;
+  pruned: string[];
+}
+
+export interface ConfigUpdateResponse {
+  changed: { key: string; value: string }[];
+  yt_api_key?: string;
+}
