@@ -9,4 +9,4 @@ ENV NODE_ENV=production PORT=4949 TUBESCOPE_DATA_DIR=/data HOME=/tmp TUBESCOPE_N
 RUN mkdir /data && chown bun:bun /data
 USER bun
 EXPOSE 4949
-CMD ["bun", "src/server.js"]
+CMD ["bun", "src/server.ts"]

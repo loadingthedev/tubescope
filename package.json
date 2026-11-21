@@ -8,14 +8,19 @@
     "bun": ">=1.4.0"
   },
   "scripts": {
-    "start": "bun src/server.js",
-    "dev": "bun --watch src/server.js",
+    "start": "bun src/server.ts",
+    "dev": "bun --watch src/server.ts",
     "test": "bun test --isolate --timeout 180000",
-    "snapshot": "bun src/jobs/run-snapshot.js"
+    "snapshot": "bun src/jobs/run-snapshot.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "express": "^4.21.2",
     "node-cron": "^3.0.3"
   },
-  "packageManager": "bun@1.4.0"
+  "packageManager": "bun@1.4.0",
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "typescript": "^7.0.2"
+  }
 }

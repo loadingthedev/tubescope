@@ -6,12 +6,12 @@ from playwright.sync_api import sync_playwright
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 data = tempfile.mkdtemp(prefix='td-ui-')
 mock_port, port = 4777, 4778
-subprocess.run(['pkill', '-f', 'bun test/mock-youtube.js']); subprocess.run(['pkill', '-f', 'bun src/server.js']); time.sleep(0.5)
+subprocess.run(['pkill', '-f', 'bun test/mock-youtube.ts']); subprocess.run(['pkill', '-f', 'bun src/server.ts']); time.sleep(0.5)
 import atexit; atexit.register(lambda: [p.kill() for p in (mock, srv)])
 env = dict(os.environ, MOCK_PORT=str(mock_port))
-mock = subprocess.Popen([sys.executable and 'bun', 'test/mock-youtube.js'], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+mock = subprocess.Popen([sys.executable and 'bun', 'test/mock-youtube.ts'], cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 env2 = dict(os.environ, PORT=str(port), TUBESCOPE_DATA_DIR=data, TUBESCOPE_NO_SCHEDULER='1', TUBESCOPE_NO_AUTOCONNECT='1', YT_API_BASE=f'http://127.0.0.1:{mock_port}/youtube/v3', YT_ANALYTICS_BASE=f'http://127.0.0.1:{mock_port}/v2/reports', YT_SUGGEST_URL=f'http://127.0.0.1:{mock_port}/complete/search', YT_REPORTING_BASE=f'http://127.0.0.1:{mock_port}/reporting/v1', YT_UPLOAD_BASE=f'http://127.0.0.1:{mock_port}/upload', IG_GRAPH_BASE=f'http://127.0.0.1:{mock_port}/ig')
-srv = subprocess.Popen(['bun', 'src/server.js'], cwd=ROOT, env=env2, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+srv = subprocess.Popen(['bun', 'src/server.ts'], cwd=ROOT, env=env2, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 base = f'http://127.0.0.1:{port}'
 
 def api(path, method='GET', body=None):
@@ -35,7 +35,7 @@ api(f'/competitors/{OWNER}/refresh', 'POST')
 api('/settings', 'PUT', {'radar_watch_days': '30', 'radar_watch_competitor_days': '30'})
 api(f'/radar/calibrate/{OWNER}?wait=1', 'POST', {'ai': False})
 api('/radar/watch/run', 'POST'); api('/radar/watch/run', 'POST')
-api('/settings', 'PUT', {'ai_provider': 'claude-cli', 'claude_cli_path': os.path.join(ROOT, 'test', 'fake-claude.mjs')})
+api('/settings', 'PUT', {'ai_provider': 'claude-cli', 'claude_cli_path': os.path.join(ROOT, 'test', 'fake-claude.ts')})
 api('/radar/score', 'POST', {'channelId': OWNER, 'variants': [{'title': 'Nobody Warns You About Estate Recovery'}, {'title': 'Estate Recovery Explained'}], 'hook': 'Medicaid can take the house after your parent dies.'})
 # Autopilot, CTR feed, daily ideas
 api(f'/reach/{OWNER}/sync', 'POST')
@@ -98,7 +98,7 @@ with sync_playwright() as p:
     pg.goto(base + '/#/keywords?q=medicaid'); pg.wait_for_timeout(800); pg.click('#compete'); pg.wait_for_timeout(1200); assert 'Opportunity score' in pg.inner_text('#out')
     pg.goto(base + '/#/outliers'); pg.wait_for_timeout(600); pg.click('#go'); pg.wait_for_timeout(1500); print('OUTL:', pg.inner_text('#out')[:200]); assert 'outlier' in pg.inner_text('#out').lower()
     # Virality radar interactions
-    api('/settings', 'PUT', {'ai_provider': 'claude-cli', 'claude_cli_path': os.path.join(ROOT, 'test', 'fake-claude.mjs')})
+    api('/settings', 'PUT', {'ai_provider': 'claude-cli', 'claude_cli_path': os.path.join(ROOT, 'test', 'fake-claude.ts')})
     pg.goto(base + '/#/radar/score'); pg.wait_for_timeout(700)
     pg.fill('#titles', 'The Medicaid Lookback Rule That Costs Families $80K\nMedicaid lookback explained\nWhy Nobody Warns You About the 5-Year Lookback')
     pg.fill('#hook', 'If your mom gave you money in the last five years, Medicaid can deny her care. Here is the rule.')

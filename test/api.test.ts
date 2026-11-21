@@ -1,0 +1,415 @@
+import { FFMPEG, CAN_RENDER, RENDER_SKIP } from './media-support.ts';
+// Integration: real server + mock YouTube. Exercises every route family end to end.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { startMock, calls, EL } from './mock-youtube.ts';
+
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-api-'));
+let mock, child, base;
+const OWNER = 'UCowner00000000000000001', COMP = 'UCcomp000000000000000002';
+
+async function api(p, { method = 'GET', body }: { method?: string; body?: any } = {}) {
+  const res = await fetch(base + '/api' + p, { method, headers: body !== undefined ? { 'content-type': 'application/json' } : {}, body: body !== undefined ? JSON.stringify(body) : undefined });
+  const text = await res.text();
+  let json; try { json = JSON.parse(text); } catch { json = text; }
+  return { status: res.status, json };
+}
+const ok = async (p, o?) => { const r = await api(p, o); assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json).slice(0, 300)}`); return r.json; };
+
+before(async () => {
+  mock = await startMock(0);
+  const port = 4900 + Math.floor(Math.random() * 90);
+  base = `http://127.0.0.1:${port}`;
+  child = spawn(process.execPath, ['src/server.ts'], { cwd: path.join(path.dirname(new URL(import.meta.url).pathname), '..'), env: { ...process.env, PORT: String(port), TUBESCOPE_DATA_DIR: dataDir, TUBESCOPE_NO_SCHEDULER: '1', TUBESCOPE_NO_AUTOCONNECT: '1', YT_API_BASE: `http://127.0.0.1:${mock.port}/youtube/v3`, YT_ANALYTICS_BASE: `http://127.0.0.1:${mock.port}/v2/reports`, YT_SUGGEST_URL: `http://127.0.0.1:${mock.port}/complete/search`, YT_UPLOAD_BASE: `http://127.0.0.1:${mock.port}/upload`, IG_GRAPH_BASE: `http://127.0.0.1:${mock.port}/ig`, TT_API_BASE: `http://127.0.0.1:${mock.port}/tt`, TT_AUTH_BASE: `http://127.0.0.1:${mock.port}/tt-auth`, EL_API_BASE: `http://127.0.0.1:${mock.port}/el`, HF_API_BASE: `http://127.0.0.1:${mock.port}/hf`, HEYGEN_API_BASE: `http://127.0.0.1:${mock.port}/hg` }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child.stderr.on('data', d => process.stderr.write('[server] ' + d));
+  for (let i = 0; i < 50; i++) { try { await fetch(base + '/api/status'); break; } catch { await new Promise(r => setTimeout(r, 100)); } }
+});
+after(() => { child.kill(); mock.server.close(); });
+
+test('status & settings & key test', async () => {
+  const s = await ok('/status');
+  assert.equal(s.configured.apiKey, false);
+  await ok('/settings', { method: 'PUT', body: { yt_api_key: 'TESTKEY', google_client_id: 'cid', google_client_secret: 'sec', ai_provider: 'none', default_country: 'US' } });
+  const st = await ok('/settings');
+  assert.equal(st.yt_api_key, '••••TKEY', 'secrets are masked');
+  await ok('/settings', { method: 'PUT', body: { yt_api_key: st.yt_api_key } }); // masked value must not overwrite
+  assert.equal((await ok('/settings/test-key', { method: 'POST' })).categories, 2);
+  const url = (await ok('/oauth/url')).url;
+  assert.ok(url.includes('accounts.google.com') && url.includes('yt-analytics'));
+});
+
+test('add owned channel by handle, by URL, by video; sync; isolation', async () => {
+  const c = await ok('/channels', { method: 'POST', body: { input: '@TheParentPlan', kind: 'owned', maxVideos: 100 } });
+  assert.equal(c.id, OWNER); assert.equal(c.kind, 'owned'); assert.equal(c.authorized, false);
+  const c2 = await ok('/channels', { method: 'POST', body: { input: `https://www.youtube.com/channel/${COMP}`, kind: 'competitor' } });
+  assert.equal(c2.id, COMP);
+  const c3 = await ok('/channels', { method: 'POST', body: { input: 'https://youtu.be/comp0000002', kind: 'competitor' } });
+  assert.equal(c3.id, COMP, 'video URL resolves to its channel');
+  const lib = await ok(`/channels/${OWNER}/videos?limit=50`);
+  assert.equal(lib.total, 24); assert.ok(lib.videos.every(v => v.channel_id === OWNER), 'channel isolation');
+  const shorts = await ok(`/channels/${OWNER}/videos?format=shorts`);
+  assert.ok(shorts.total > 0 && shorts.videos.every(v => v.is_short));
+  const sorted = await ok(`/channels/${OWNER}/videos?sort=view_count&dir=desc&limit=3`);
+  assert.ok(sorted.videos[0].view_count >= sorted.videos[1].view_count);
+  const q = await ok('/quota');
+  assert.ok(q.today.units > 0 && q.today.units < 200, 'sync is cheap: ' + q.today.units);
+  const miss = await api('/channels/UCdoesnotexist0000000000x');
+  assert.equal(miss.status, 404);
+});
+
+test('video detail, checklist, age comparison, history, health, segments, slots, backup, csv', async () => {
+  const lib = await ok(`/channels/${OWNER}/videos?limit=5`);
+  const vid = lib.videos[0].id;
+  const v = await ok(`/videos/${vid}`);
+  assert.equal(v.tags.length, 3); assert.ok(v.format);
+  const chk = await ok(`/videos/${vid}/checklist`);
+  assert.ok(chk.score >= 0 && chk.items.length >= 6);
+  const age = await ok(`/videos/${vid}/age-comparison`);
+  assert.ok(age.ageDays >= 1 && Array.isArray(age.peers));
+  const h = await ok(`/channels/${OWNER}/health`);
+  assert.equal(h.total, 24);
+  const seg = await ok(`/channels/${OWNER}/segments`);
+  assert.ok(seg.long.median > 0 && seg.long.breakout.length >= 1, 'every 5th mock video is a 6x breakout');
+  const slots = await ok(`/channels/${OWNER}/publish-slots`);
+  assert.equal(slots.sampleSize, 24);
+  const hist = await ok(`/channels/${OWNER}/history`);
+  assert.equal(hist.length, 1, 'one snapshot per day');
+  const rc = await ok(`/channels/${OWNER}/report-card`);
+  assert.equal(rc.grades.length, 3);
+  const fc = await ok(`/channels/${OWNER}/forecast`);
+  assert.equal(fc.available, false);
+  const bk = await ok(`/channels/${OWNER}/backup`);
+  assert.equal(bk.videos.length, 24);
+  const csv = await fetch(base + `/api/channels/${OWNER}/export/videos.csv`);
+  assert.ok((await csv.text()).startsWith('id,title,'));
+});
+
+test('discovery: keywords, competition, rising, outliers (local + search), trending, niche, patterns', async () => {
+  const kw = await ok('/keywords/explore?q=medicaid');
+  assert.ok(kw.autocomplete.length >= 3 && kw.questions.length >= 1);
+  const comp = await ok('/keywords/competition?q=medicaid');
+  assert.ok(comp.opportunityScore >= 0 && comp.opportunityScore <= 100 && comp.results.length > 0 && comp.formula);
+  const comp2 = await ok('/keywords/competition?q=medicaid');
+  assert.equal(comp2.sampleSize, comp.sampleSize);
+  const q = await ok('/quota');
+  assert.ok(q.today.cached > 0, 'second competition call served from cache');
+  const hist = await ok('/keywords/history?q=medicaid');
+  assert.equal(hist.length, 1);
+  const rising = await ok('/keywords/rising?q=medicaid');
+  assert.equal(rising.current.length, 5);
+  const lo = await ok(`/outliers/local?channels=${OWNER},${COMP}&format=long&minX=2`);
+  assert.ok(lo.length > 0 && lo[0].outlier_x >= 2 && lo[0].channel_title);
+  const so = await ok('/outliers/search?q=medicaid&days=365&format=all');
+  assert.ok(so.results.length > 0 && 'breakout_score' in so.results[0]);
+  const tr = await ok('/trending?country=US');
+  assert.equal(tr.length, 20);
+  const cats = await ok('/categories');
+  assert.equal(cats.length, 2);
+  const niche = await ok('/niche/channels?q=caregiving');
+  assert.equal(niche.length, 3);
+  const pat = await ok('/titles/patterns', { method: 'POST', body: { titles: ['7 things', 'How to x'] } });
+  assert.equal(pat.sample, 2);
+  const sim = await ok(`/videos/${(await ok(`/channels/${OWNER}/videos?limit=1`)).videos[0].id}/similar`);
+  assert.ok(Array.isArray(sim.results));
+});
+
+test('competitors: link, compare, feed, refresh → alerts, report card, remove', async () => {
+  const c = await ok(`/competitors/${OWNER}`, { method: 'POST', body: { input: '@ElderLawExplained', note: 'legal angle' } });
+  assert.equal(c.id, 'UCcomp000000000000000003');
+  await ok(`/competitors/${OWNER}`, { method: 'POST', body: { input: COMP } });
+  const list = await ok(`/competitors/${OWNER}`);
+  assert.equal(list.length, 2);
+  const cmp = await ok(`/competitors/${OWNER}/compare`);
+  assert.equal(cmp.channels.length, 3); assert.equal(cmp.channels[0].kind, 'owned');
+  const feed = await ok(`/competitors/${OWNER}/feed?days=60`);
+  assert.ok(feed.length > 0 && feed.every(v => v.channel_id !== OWNER));
+  const r = await ok(`/competitors/${OWNER}/refresh`, { method: 'POST' });
+  assert.equal(r.refreshed, 2);
+  const alerts = await ok(`/alerts/${OWNER}`);
+  assert.ok(Array.isArray(alerts));
+  if (alerts.length) { await ok(`/alerts/read/${alerts[0].id}`, { method: 'POST' }); }
+  await ok(`/alerts/${OWNER}/read-all`, { method: 'POST' });
+  assert.equal((await ok(`/alerts/${OWNER}?unread=1`)).length, 0);
+  const rc = await ok(`/channels/${COMP}/report-card`);
+  assert.equal(rc.title, 'Caregiver Money');
+  await ok(`/competitors/${OWNER}/UCcomp000000000000000003`, { method: 'DELETE' });
+  assert.equal((await ok(`/competitors/${OWNER}`)).length, 1);
+  assert.equal((await api('/channels/UCcomp000000000000000003')).status, 404, 'unlinked competitor is cleaned up');
+});
+
+test('packaging: analyzers, chapters, tags, staged edits lifecycle, playlists', async () => {
+  const t = await ok('/packaging/title/analyze', { method: 'POST', body: { title: 'How to Protect a Parent\'s House From Medicaid in 2026', keyword: 'medicaid' } });
+  assert.ok(t.score > 60);
+  const d = await ok('/packaging/description/analyze', { method: 'POST', body: { description: 'x' } });
+  assert.ok(d.score < 50);
+  const ch = await ok('/packaging/chapters/validate', { method: 'POST', body: { text: '0:00 a\n0:20 b\n0:40 c' } });
+  assert.equal(ch.valid, true);
+  const tags = await ok('/packaging/tags', { method: 'POST', body: { title: 'Medicaid lookback rule explained', keyword: 'medicaid lookback' } });
+  assert.ok(tags.tags.length > 3 && tags.charactersUsed <= 500);
+  const vid = (await ok(`/channels/${OWNER}/videos?limit=1`)).videos[0];
+  const st = await ok('/packaging/staged', { method: 'POST', body: { channelId: OWNER, videoId: vid.id, field: 'title', newValue: 'New title' } });
+  assert.equal(st.old_value, vid.title);
+  await ok('/packaging/staged', { method: 'POST', body: { channelId: OWNER, videoId: vid.id, field: 'tags', newValue: ['a', 'b'] } });
+  assert.equal((await ok(`/packaging/staged/${OWNER}`)).length, 2);
+  // Inject owner tokens for the following read-only analytics checks.
+  const { Database } = await import('bun:sqlite');
+  const db = new Database(path.join(dataDir, 'tubescope.sqlite'), { strict: true, create: true });
+  db.prepare('UPDATE channels SET oauth_json = ? WHERE id = ?').run(JSON.stringify({ access_token: 'tok', refresh_token: 'rt', expires_at: Date.now() + 3600e3 }), OWNER);
+  db.prepare("UPDATE staged_edits SET status = 'staged', error = NULL WHERE channel_id = ?").run(OWNER);
+  db.close(true);
+  const pls = await ok(`/channels/${OWNER}/playlists?owned=1`);
+  assert.equal(pls[0].id, 'PL1');
+  assert.equal((await api(`/channels/${OWNER}/playlists`, { method: 'POST', body: { title: 'New list' } })).status, 404);
+});
+
+test('owner analytics (all reports) once authorized', async () => {
+  const ov = await ok(`/analytics/${OWNER}/overview?days=28`);
+  assert.equal(ov.totals.views, 52000); assert.equal(ov.daily.length, 28); assert.ok('views' in ov.delta);
+  const top = await ok(`/analytics/${OWNER}/top`);
+  assert.equal(top.length, 10); assert.ok(top[0].title, 'joined with local titles');
+  const vid = top[0].video;
+  const ret = await ok(`/analytics/${OWNER}/retention/${vid}`);
+  assert.equal(ret.curve.length, 51); assert.ok(ret.biggestDrops.length >= 1 && ret.checkpoints.p50 < ret.checkpoints.p10);
+  const tr = await ok(`/analytics/${OWNER}/traffic`);
+  assert.equal(tr.types.length, 5); assert.equal(tr.searchTerms.length, 3); assert.ok(Math.abs(tr.types.reduce((a, x) => a + x.share, 0) - 1) < 1e-6);
+  assert.equal((await ok(`/analytics/${OWNER}/geo`)).rows.length, 4);
+  assert.equal((await ok(`/analytics/${OWNER}/demographics`)).rows.length, 8);
+  assert.equal((await ok(`/analytics/${OWNER}/devices`)).length, 3);
+  const subs = await ok(`/analytics/${OWNER}/subscribers?days=30`);
+  assert.equal(subs.daily.length, 30); assert.ok(subs.byVideo[0].net > 0);
+  const wh = await ok(`/analytics/${OWNER}/watch-hours`);
+  assert.ok(wh.publicWatchHours > 0 && wh.ypp.watchHoursPct <= 1);
+  const ct = await ok(`/analytics/${OWNER}/content-types`);
+  assert.equal(ct.analytics.length, 2); assert.ok(ct.library.length >= 2);
+  const rev = await ok(`/analytics/${OWNER}/revenue`);
+  assert.equal(rev.available, true); assert.ok(rev.totals.rpm > 0);
+  const imp = await ok(`/analytics/${OWNER}/studio-import`, { method: 'POST', body: { csv: 'Content,Video title,Impressions,Impressions click-through rate (%),Average view duration,Average percentage viewed (%),Views\nTotal,,5000,4.1,0:03:00,40,2000\n' + vid + ',Top video,4000,3.0,0:04:00,41,1500\nother000000,Other,1000,8.0,0:02:00,30,500\n', period: 'test' } });
+  assert.equal(imp.imported, 2);
+  const sd = await ok(`/analytics/${OWNER}/studio`);
+  assert.equal(sd.rows.length, 2); assert.ok(sd.impressionWeightedCtr > 3 && sd.impressionWeightedCtr < 5); assert.equal(sd.lowCtrHighImpressions.length, 1);
+  const tx = await ok(`/transcript/${OWNER}/${vid}`);
+  assert.equal(tx.segments.length, 3); assert.ok(/lookback/.test(tx.text));
+});
+
+test('audit export: catalogue, both windows, per-video with format split, traffic, retention, nulls with reasons', async () => {
+  const r = await ok(`/export/audit/${OWNER}?retention=3&filename=test-audit.json`);
+  const a = r.audit;
+  assert.ok(r.file.endsWith('test-audit.json') && fs.existsSync(r.file));
+  assert.equal(a.channel.id, OWNER); assert.ok(a.channel.google_connected === true && a.generated_at);
+  assert.ok(a.reporting_windows.current.days === 28 && a.reporting_windows.previous.endDate < a.reporting_windows.current.startDate);
+  assert.ok(a.catalogue.count >= 20 && a.catalogue.videos[0].url.includes(a.catalogue.videos[0].id) && 'description' in a.catalogue.videos[0] && ['long', 'short', 'live'].includes(a.catalogue.videos[0].format));
+  assert.ok(a.channel_performance.windows.current.totals.views > 0 && a.channel_performance.windows.previous.daily.length === 28);
+  const pv = a.per_video.windows.current; assert.ok(pv.videos.length === a.catalogue.count && pv.totals_by_format.long && pv.totals_by_format.short);
+  assert.ok(pv.videos.every(v => 'advertising_views' in v && v.impressions === null && v.thumbnail_ctr === null));
+  assert.ok(a.traffic.windows.current.by_source.length > 0 && 'advertising' in a.traffic.windows.current);
+  assert.equal(a.retention.covered, 3); assert.ok(Object.keys(a.retention.videos).length === 3);
+  assert.ok(a.impressions_ctr.rows ? /Studio CSV/.test(a.impressions_ctr.source) : /Studio CSV/.test(a.impressions_ctr.reason));
+  assert.ok(a.transcripts.value === null && /250 quota/.test(a.transcripts.reason));
+  assert.ok(!JSON.stringify(a).includes('refresh_token') && !JSON.stringify(a).includes('access_token'));
+});
+
+test('comments: read, filters, clusters, templates, reply, giveaway', async () => {
+  const c = await ok(`/comments?channel=${OWNER}&owner=${OWNER}&filter=unanswered&pages=1`);
+  assert.equal(c.total, 40); assert.ok(c.shown < c.total, 'owner-replied threads filtered out'); assert.ok(c.terms.length > 5 && c.questionClusters.length >= 1);
+  const qs = await ok(`/comments?channel=${OWNER}&owner=${OWNER}&filter=questions&pages=1`);
+  assert.ok(qs.threads.every(t => t.isQuestion && !t.ownerReplied));
+  const men = await ok(`/comments?channel=${OWNER}&owner=${OWNER}&filter=mentions&pages=1`);
+  assert.ok(men.threads.every(t => /@/.test(t.text)));
+  const vidc = await ok(`/comments?video=${c.threads[0].videoId}&owner=${OWNER}&filter=all&pages=1`);
+  assert.equal(vidc.total, 40);
+  const tid = (await ok('/comments/templates', { method: 'POST', body: { name: 'Thanks', body: 'Thanks {{name}}!' } })).id;
+  assert.equal((await ok('/comments/templates')).length, 1);
+  await ok(`/comments/templates/${tid}`, { method: 'PUT', body: { name: 'Thanks', body: 'Cheers {{name}}' } });
+  const rep = await api('/comments/reply', { method: 'POST', body: { channelId: OWNER, parentId: c.threads[0].id, text: 'Appreciate it' } });
+  assert.equal(rep.status, 404);
+  await ok(`/comments/templates/${tid}`, { method: 'DELETE' });
+  const win = await ok('/comments/giveaway', { method: 'POST', body: { threads: c.threads, keyword: '', ownerChannelId: OWNER } });
+  assert.equal(win.winners.length, 1); assert.ok(win.seed);
+});
+
+test('boards, blueprints, saved, calculators, export, snapshot run, quota guard', async () => {
+  const bid = (await ok(`/boards/${OWNER}`, { method: 'POST', body: { name: 'Inspo' } })).id;
+  const iid = (await ok(`/boards/id/${bid}/items`, { method: 'POST', body: { kind: 'video', ref: { id: 'x', title: 'y' }, note: 'n' } })).id;
+  assert.equal((await ok(`/boards/id/${bid}/items`))[0].ref.title, 'y');
+  await ok(`/boards/items/${iid}`, { method: 'PUT', body: { note: 'updated' } });
+  assert.equal((await ok(`/boards/${OWNER}`))[0].items, 1);
+  await ok(`/boards/items/${iid}`, { method: 'DELETE' });
+  await ok(`/boards/id/${bid}`, { method: 'DELETE' });
+  const bp = (await ok(`/blueprints/${OWNER}`, { method: 'POST', body: { title: 'Idea', titles: ['A', 'B'] } })).id;
+  await ok(`/blueprints/id/${bp}`, { method: 'PUT', body: { status: 'scripted' } });
+  const bps = await ok(`/blueprints/${OWNER}`);
+  assert.equal(bps[0].status, 'scripted'); assert.deepEqual(bps[0].titles, ['A', 'B']);
+  await ok(`/blueprints/id/${bp}`, { method: 'DELETE' });
+  const sid = (await ok(`/saved/${OWNER}`, { method: 'POST', body: { kind: 'script', title: 't', body: 'b' } })).id;
+  assert.equal((await ok(`/saved/${OWNER}?kind=script`)).length, 1);
+  await ok(`/saved/id/${sid}`, { method: 'DELETE' });
+  const e = await ok('/calc/earnings', { method: 'POST', body: { views: 50000, niche: 'Education & science', sponsorPerVideo: 100, videosPerMonth: 4 } });
+  assert.equal(e.sponsorships, 400);
+  assert.ok((await ok('/calc/valuation', { method: 'POST', body: { monthlyRevenue: 100 } })).high === 4800);
+  const csv = await fetch(base + '/api/export/csv', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x', rows: [{ a: 1 }] }) });
+  assert.equal(await csv.text(), 'a\n1');
+  assert.deepEqual((await ok('/safety-checklist')).length, 9);
+  assert.ok((await ok('/coach/lessons')).length === 6);
+  const ctx = await ok(`/coach/${OWNER}/context`);
+  assert.ok(/CHANNEL: The Parent Plan/.test(ctx.context) && /COMPETITORS TRACKED/.test(ctx.context));
+  const ai = await api(`/coach/${OWNER}/ask`, { method: 'POST', body: { question: 'x' } });
+  assert.equal(ai.status, 500); assert.ok(/disabled/.test(ai.json.error));
+  const snap = await ok('/snapshot/run', { method: 'POST' });
+  assert.ok(snap.channels >= 1 && snap.errors.length === 0, JSON.stringify(snap));
+  await ok('/settings', { method: 'PUT', body: { yt_quota_limit: 1, yt_quota_reserve: 0 } });
+  await ok('/cache/clear', { method: 'POST', body: {} });
+  const guard = await api('/trending?country=GB');
+  assert.equal(guard.status, 429); assert.equal(guard.json.reason, 'quotaGuard');
+  await ok('/settings', { method: 'PUT', body: { yt_quota_limit: 10000, yt_quota_reserve: 500 } });
+  const lan = await fetch(base + '/', { headers: {} });
+  assert.equal(lan.status, 200);
+});
+
+test('scores, demand index, and extension endpoints', async () => {
+  const cs = await ok(`/scores/channel/${OWNER}`);
+  assert.ok(cs.score >= 0 && cs.score <= 100 && cs.grade && cs.advice && cs.components.hitRate !== undefined);
+  const vs = await ok(`/scores/channel/${OWNER}/videos`);
+  const ids = Object.keys(vs); assert.ok(ids.length >= 20);
+  const one = await ok(`/scores/video/${ids[0]}`);
+  assert.ok(one.components.packaging >= 0 && one.components.performance !== undefined && /packaging/.test(one.formula));
+  const dm = await ok('/keywords/demand?q=medicaid');
+  assert.ok(dm.demandIndex >= 0 && dm.demandIndex <= 100 && dm.regionsPresent.length === 5 && dm.components.questions >= 0 && /not a monthly search volume/.test(dm.note));
+  const ev = await ok(`/ext/video/${ids[0]}`);
+  assert.ok(ev.video.id === ids[0] && ev.channel && ev.baseline.sample > 0 && ev.outlierX !== null && ev.isOwned === true && ev.ownedChannels.length >= 1);
+  assert.ok(ev.est && ev.est.high >= ev.est.low && ev.est.niche && ev.vph >= 0 && ev.seoScore >= 0 && ev.seoScore <= 100 && ev.likeRate >= 0);
+  assert.ok(ev.channelSummary && ev.channelSummary.monthly.high >= ev.channelSummary.monthly.low && ev.channelSummary.recent.length > 0 && ev.channelSummary.uploadsPerWeek > 0);
+  const ec = await ok('/ext/channel?ref=@CaregiverMoney');
+  assert.ok(ec.channel.id === 'UCcomp000000000000000002' && ec.summary.monthly.monthlyViews > 0 && ec.summary.recent.length > 0 && ec.isOwned === false && /Scenario/.test(ec.summary.monthly.note));
+  const eb = await ok(`/ext/videos?ids=${ids.slice(0, 5).join(',')},notavalidid`);
+  assert.equal(Object.keys(eb.videos).length, 5);
+  const first = eb.videos[ids[0]]; assert.ok(first.views >= 0 && first.est.niche && first.vpd >= 0 && first.subs > 0 && first.vsChannelAvg > 0);
+  const ek = await ok('/ext/keyword?q=medicaid');
+  assert.ok(ek.demand.demandIndex >= 0 && ek.competition && /keywords\?q=medicaid/.test(ek.openUrl));
+  const es = await ok('/ext/summary');
+  assert.ok(es.channels.length >= 1 && es.channels[0].score !== null && es.quota.limit);
+  const sv = await ok('/ext/save', { method: 'POST', body: { ref: { id: 'x', title: 'from yt' } } });
+  assert.ok(sv.id && sv.board);
+  const cors = await fetch(base + '/api/status', { method: 'OPTIONS', headers: { Origin: 'chrome-extension://abcdef' } });
+  assert.equal(cors.status, 204); assert.equal(cors.headers.get('access-control-allow-origin'), 'chrome-extension://abcdef');
+  const noCors = await fetch(base + '/api/status', { headers: { Origin: 'https://evil.example' } });
+  assert.equal(noCors.headers.get('access-control-allow-origin'), null);
+});
+
+
+test('media pipeline: probe, segments, caption timing, timeline render, transcode, frame', { skip: RENDER_SKIP }, async () => {
+  const st = await ok('/render/status'); assert.equal(st.ready, true, JSON.stringify(st));
+  const { execFileSync } = await import('node:child_process');
+  const voice = path.join(dataDir, 'voice.mp4'), still = path.join(dataDir, 'still.png'), bed = path.join(dataDir, 'bed.wav');
+  // 4s "voice": tone 0.4–1.4s, silence, tone 1.9–3.4s (two sentences), on a 640x360 colour video
+  execFileSync(st.ffmpeg, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:r=30:d=4', '-f', 'lavfi', '-i', "aevalsrc='0.5*sin(2*PI*220*t)*(between(t,0.4,1.4)+between(t,1.9,3.4))':s=48000:d=4", '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', voice]);
+  execFileSync(st.ffmpeg, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=800x600:d=1', '-frames:v', '1', still]);
+  execFileSync(st.ffmpeg, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', "aevalsrc='0.3*sin(2*PI*110*t)':s=48000:d=5", bed]);
+  const pr = await ok('/media/probe', { method: 'POST', body: { file: voice } }); assert.equal(pr.video.width, 640); assert.ok(pr.duration > 3.5);
+  const seg = await ok('/media/segments', { method: 'POST', body: { file: voice } }); assert.equal(seg.segments.length, 2, JSON.stringify(seg));
+  const cap = await ok('/media/captions', { method: 'POST', body: { file: voice, script: ['Hello there friend.', 'Second sentence here now.'] } });
+  assert.equal(cap.lines.length, 2); assert.ok(cap.groups.length >= 2); assert.ok(cap.words[0].start >= 0.35 && cap.words[0].start <= 0.5, JSON.stringify(cap.words[0]));
+  const out = path.join(dataDir, 'render.mp4');
+  const job = await ok('/render?wait=1', { method: 'POST', body: { output: out, width: 1080, height: 1920, fps: 30, tracks: [
+    { type: 'video', src: voice, start: 0, duration: 4, w: 1080, h: 1920, focus: [0.5, 0.5] },
+    { type: 'image', src: still, start: 1, end: 3, y: 0, h: 960, zoom: { from: 1, to: 1.3 } },
+    { type: 'box', start: 0, end: 1, y: 840, h: 250, opacity: 0.7 },
+    { type: 'text', text: 'I BUILT THIS', start: 0, end: 1, y: 880, size: 100, fadeIn: 0.1 },
+    { type: 'captions', script: ['Hello there friend.', 'Second sentence here now.'], audioFrom: 0, y: 1180 },
+    { type: 'tone', start: 1, kind: 'thump' },
+    { type: 'audio', src: bed, start: 0, volume: 0.3, duck: true, fadeOut: 1 },
+  ], loudness: -14 } });
+  assert.equal(job.status, 'done', JSON.stringify(job.log));
+  const o = await ok('/media/probe', { method: 'POST', body: { file: out } });
+  assert.equal(o.video.width, 1080); assert.equal(o.video.height, 1920); assert.ok(Math.abs(o.duration - 4) < 0.3, 'duration ' + o.duration); assert.equal(o.audio.codec, 'aac');
+  assert.ok(job.log.some(l => /caption groups/.test(l)) && job.log.some(l => /loudness/.test(l)));
+  const tr = await ok('/media/transcode?wait=1', { method: 'POST', body: { file: voice, preset: 'square', output: path.join(dataDir, 'sq.mp4') } });
+  assert.equal(tr.status, 'done', JSON.stringify(tr.log)); assert.equal((await ok('/media/probe', { method: 'POST', body: { file: tr.output } })).video.width, 1080);
+  const fr = await ok('/media/frame', { method: 'POST', body: { file: out, at: 0.5, width: 270 } }); assert.ok(fs.existsSync(fr.file));
+  assert.equal((await api('/render', { method: 'POST', body: { tracks: [] } })).status, 400);
+  assert.equal((await ok('/render/jobs')).length, 2);
+});
+
+
+test('voiceover: ElevenLabs words → caption groups; status, voices, quota; short timeline', async () => {
+  let r = await api('/media/voiceover', { method: 'POST', body: { text: 'hello' } }); assert.equal(r.status, 500); assert.ok(/No voice provider/.test(r.json.error));
+  assert.equal((await ok('/media/voiceover/status')).provider, 'none');
+  await ok('/settings', { method: 'PUT', body: { elevenlabs_api_key: 'ELKEY', elevenlabs_voice_id: 'V2' } });
+  assert.equal((await ok('/settings')).elevenlabs_api_key, '••••LKEY');
+  const st = await ok('/media/voiceover/status'); assert.equal(st.configured, true); assert.equal(st.provider, 'elevenlabs'); assert.equal(st.voice_id, 'V2');
+  const voices = await ok('/media/voiceover/voices'); assert.equal(voices.length, 2); assert.equal(voices[1].name, 'Sal');
+  const q = await ok('/media/voiceover/quota'); assert.equal(q.left, 28800);
+  if (FFMPEG) { const { execFileSync } = await import('node:child_process'); const mp3 = path.join(dataDir, 'fx.mp3'); execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', "aevalsrc='0.3*sin(2*PI*220*t)':s=44100:d=3", '-c:a', 'libmp3lame', '-b:a', '64k', mp3]); EL.mp3 = fs.readFileSync(mp3); }
+  const v = await ok('/media/voiceover', { method: 'POST', body: { text: 'Tubescope is free. It runs on your Mac.', speed: 1.05 } });
+  assert.equal(v.provider, 'elevenlabs'); assert.equal(v.voice_id, 'V2'); assert.ok(fs.existsSync(v.file)); assert.equal(v.words.length, 8); assert.equal(v.words[0].word, 'Tubescope'); assert.equal(v.words[0].start, 0); assert.ok(v.words[7].end > 2);
+  assert.ok(v.groups.length >= 2 && v.groups.every(g => g.text && g.end > g.start)); assert.deepEqual(v.lines, ['Tubescope is free.', 'It runs on your Mac.']);
+  const el = calls.find(c => c.elBody); assert.equal(el.voice, 'V2'); assert.equal(el.elBody.voice_settings.speed, 1.05); assert.equal(el.elBody.model_id, 'eleven_multilingual_v2');
+  assert.equal((await ok('/media/voiceover')).length, 1); assert.equal((await ok('/media/voiceover/' + v.id)).words.length, 8);
+  r = await api('/media/voiceover', { method: 'POST', body: { text: 'x'.repeat(5001) } }); assert.equal(r.status, 500); assert.ok(/5,000/.test(r.json.error));
+  // HeyGen: becomes the default once its key is set; cloned voices listed first; words from original_words; provider override still works
+  await ok('/settings', { method: 'PUT', body: { heygen_api_key: 'HGKEY' } });
+  const st2 = await ok('/media/voiceover/status'); assert.equal(st2.provider, 'heygen'); assert.equal(st2.heygen.configured, true); assert.equal(st2.heygen.voice_id, '');
+  const hv = await ok('/media/voiceover/voices'); assert.equal(hv[0].name, 'Salman clone'); assert.equal(hv[0].cloned, true); assert.equal(hv.length, 2);
+  assert.equal((await ok('/media/voiceover/quota')).credits, 90);
+  assert.equal((await ok('/media/voiceover/voices?provider=elevenlabs')).length, 2);
+  r = await api('/media/voiceover', { method: 'POST', body: { text: 'No voice yet.' } }); assert.equal(r.status, 500); assert.ok(/voice ID/.test(r.json.error));
+  await ok('/settings', { method: 'PUT', body: { heygen_voice_id: 'clone9', heygen_model: 'heygen-voice-1-turbo-free' } });
+  const hvo = await ok('/media/voiceover', { method: 'POST', body: { text: 'Built with my own voice. Free.', speed: 1.1 } });
+  assert.equal(hvo.provider, 'heygen'); assert.equal(hvo.voice_id, 'clone9'); assert.equal(hvo.model, 'heygen-voice-1-turbo-free'); assert.equal(hvo.words.length, 6); assert.equal(hvo.words[1].word, 'with'); assert.equal(hvo.words[1].start, 0.4);
+  assert.equal(hvo.duration, 2.4); assert.ok(fs.existsSync(hvo.file) && fs.statSync(hvo.file).size === EL.mp3.length); assert.ok(hvo.groups.length >= 2);
+  const hgc = calls.find(c => c.hgBody); assert.equal(hgc.hgBody.with_timestamps, true); assert.equal(hgc.hgBody.output_format.encoding, 'mp3'); assert.equal(hgc.hgBody.speed, 1.1);
+  assert.equal((await ok('/media/voiceover', { method: 'POST', body: { text: 'Back to eleven.', provider: 'elevenlabs' } })).provider, 'elevenlabs');
+  await ok('/settings', { method: 'PUT', body: { voice_provider: 'elevenlabs' } }); assert.equal((await ok('/media/voiceover/status')).provider, 'elevenlabs');
+  await ok('/settings', { method: 'PUT', body: { voice_provider: 'auto' } });
+  // timeline builder (no render)
+  r = await api('/media/voiceover/short', { method: 'POST', body: { text: 'Hi there.' } }); assert.equal(r.status, 500); assert.ok(/background/.test(r.json.error));
+  const still = path.join(dataDir, 'bg.png'); fs.writeFileSync(still, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+  const o = await ok('/media/voiceover/short', { method: 'POST', body: { text: 'Hi there. Welcome back.', background: still, headline: 'FREE VIDIQ' } });
+  assert.equal(o.timeline.width, 1080); assert.equal(o.timeline.tracks[0].type, 'image'); assert.equal(o.timeline.tracks[1].src, o.voiceover.file);
+  const cap = o.timeline.tracks.find(t => t.type === 'captions'); assert.ok(cap.groups.length >= 1); assert.equal(cap.groups[0].start, 0.3, 'captions shifted with the voice offset');
+  assert.equal(o.timeline.tracks.find(t => t.type === 'text').text, 'FREE VIDIQ');
+  if (CAN_RENDER) { const rr = await ok('/media/voiceover/short?wait=1', { method: 'POST', body: { text: 'Hi there.', background: still, render: true } }); assert.equal(rr.job.status, 'done', JSON.stringify(rr.job.log)); assert.ok(fs.existsSync(rr.job.output)); }
+});
+
+test('thumbnail maker: frames × headlines × styles ranked; Higgsfield background; set storage', { skip: RENDER_SKIP }, async () => {
+  const st = await ok('/media/thumbnails/status'); assert.equal(st.ffmpeg, true); assert.equal(st.higgsfield, false); assert.deepEqual(Object.keys(st.styles), ['bold', 'clean', 'alert', 'contrast']);
+  const { execFileSync } = await import('node:child_process');
+  const vidf = path.join(dataDir, 'thumbsrc.mp4'); execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=s=640x360:r=30:d=6', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', vidf]);
+  let r: Awaited<ReturnType<typeof api>> | Response = await api('/media/thumbnails', { method: 'POST', body: {} }); assert.equal(r.status, 500);
+  const s = await ok('/media/thumbnails', { method: 'POST', body: { file: vidf, title: 'I cloned vidIQ for free', headlines: ['FREE VIDIQ|AT HOME', 'I CLONED IT FOR ZERO DOLLARS A MONTH'], styles: ['bold', 'contrast'], frames: 2, score: false } });
+  assert.equal(s.candidates.length, 8); assert.ok(s.candidates.every(c => fs.existsSync(c.file) && c.file.includes('/thumbs/maker/') && c.score >= 0));
+  assert.ok(s.candidates[0].score >= s.candidates.at(-1).score); assert.equal(s.candidates[0].scoredBy, 'heuristic');
+  assert.deepEqual(s.candidates.find(c => c.headline.includes('|')).lines, ['FREE VIDIQ', 'AT HOME']);
+  const short = s.candidates.find(c => c.lines[0] === 'FREE VIDIQ'), long = s.candidates.find(c => c.lines.join(' ').split(' ').length === 7);
+  assert.ok(short.score > long.score, 'shorter headline ranks higher');
+  assert.equal((await ok('/media/thumbnails')).length, 1); assert.equal((await ok('/media/thumbnails/' + s.id)).candidates.length, 8);
+  r = await fetch(base + '/api/media/thumbnails/' + s.id + '/file/0'); assert.equal(r.status, 200); assert.equal((r as Response).headers.get('content-type'), 'image/jpeg');
+  // Higgsfield hook: not configured → skipped with a note; configured → polled, downloaded, used as top background
+  const s2 = await ok('/media/thumbnails', { method: 'POST', body: { file: vidf, headlines: ['HI'], styles: ['clean'], frames: 1, score: false, ai: { prompt: 'a red mac mini' } } });
+  assert.ok(s2.notes.some(n => /Higgsfield skipped/.test(n))); assert.equal(s2.candidates.length, 1);
+  await ok('/settings', { method: 'PUT', body: { higgsfield_api_key: 'HFKEY', higgsfield_api_secret: 'HFSECRET' } });
+  assert.equal((await ok('/media/thumbnails/status')).higgsfield, true);
+  const s3 = await ok('/media/thumbnails', { method: 'POST', body: { file: vidf, headlines: ['HI'], styles: ['clean'], frames: 1, score: false, ai: { prompt: 'a red mac mini' } } });
+  assert.equal(s3.notes.length, 0, JSON.stringify(s3.notes)); assert.equal(s3.candidates.length, 2); assert.equal(s3.candidates[0].source, 'higgsfield');
+  const hf = calls.find(c => c.hfBody); assert.ok(/red mac mini/.test(hf.hfBody.params.prompt)); assert.equal(hf.hfBody.params.aspect_ratio, '16:9');
+  assert.ok(calls.filter(c => c.path === '/hf/v1/requests/req1').length >= 2, 'polled until completed');
+});
+
+test('similar channels + Studio overlay scoring endpoint', async () => {
+  const chans = await ok('/channels'); const owned = chans.find(c => c.kind === 'owned');
+  const sim = await ok(`/channels/${owned.id}/similar-channels?limit=10`);
+  assert.ok(sim.basedOn.queries.length >= 1 && sim.basedOn.queries.length <= 3); assert.ok(sim.results.length >= 1);
+  assert.ok(!sim.results.some(c => c.id === owned.id), 'excludes itself'); assert.ok(sim.results[0].hits >= 1 && typeof sim.results[0].sizeFit === 'number' && sim.results[0].score >= sim.results.at(-1).score);
+  assert.ok(sim.results.every(c => Array.isArray(c.sampleTitles) && 'tracked' in c));
+  let r = await api('/ext/studio', { method: 'POST', body: { title: '' } }); assert.equal(r.status, 400);
+  const st = await ok('/ext/studio', { method: 'POST', body: { videoId: 'zzzzzzzzzzz', title: 'Medicaid lookback: the 5 year rule explained', description: 'Short.', tags: ['medicaid', 'medicaid lookback'] } });
+  assert.equal(st.isOwned, false); assert.equal(st.channelId, owned.id); assert.ok(st.title.score > 0 && st.title.checks.length > 5); assert.ok(st.description.checks.length >= 5);
+  assert.equal(st.tags.list.length, 2); assert.ok(st.tags.checks.find(c => c.name === '8–20 tags').pass === false); assert.ok(st.seoScore >= 0 && st.seoScore <= 100);
+  assert.ok(typeof st.demand.index === 'number' && st.demand.band); assert.ok(st.radar && (typeof st.radar.score === 'number' || st.radar.score === null || st.radar.error), JSON.stringify(st.radar).slice(0, 200));
+  assert.ok(Array.isArray(st.suggestedTags));
+  const guide = await (await fetch(base + '/api/agent')).text(); assert.ok(/media\/voiceover/.test(guide) && /media\/thumbnails/.test(guide) && /similar-channels/.test(guide));
+  assert.equal((await ok('/status')).version, '2.1.0');
+});
