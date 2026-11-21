@@ -28,6 +28,7 @@ import * as autopilot from '../services/autopilot.ts';
 import * as ideas from '../services/ideas.ts';
 import * as slots from '../services/slots.ts';
 import * as portfolio from '../services/portfolio.ts';
+import { buildWeeklyReport, publishWeeklyReport } from '../services/weekly-report.ts';
 import * as transcribe from '../services/transcribe.ts';
 import { runDailySnapshot } from '../jobs/scheduler.ts';
 import { setup } from './setup.ts';
@@ -40,6 +41,7 @@ api.use(setup); // local setup, validated settings and tools/OpenAPI
 api.use(growth); // outlier index, formulas, thumbnails, ranks, bulk edits, make-a-video, more platforms, phone
 const w = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const SECRET_KEYS = [
+  'notion_token',
   'yt_api_key',
   'google_client_secret',
   'anthropic_api_key',
@@ -54,6 +56,18 @@ const SECRET_KEYS = [
   'higgsfield_api_key',
   'higgsfield_api_secret',
 ];
+
+api.get('/reports/weekly', (req, res) => {
+  const { title, markdown } = buildWeeklyReport(typeof req.query.channelId === 'string' ? req.query.channelId : undefined);
+  res.json({ title, markdown });
+});
+api.post(
+  '/reports/weekly/notion',
+  w(async (req, res) => {
+    if (req.body?.dryRun !== undefined && typeof req.body.dryRun !== 'boolean') return res.status(400).json({ error: 'dryRun must be a boolean.' });
+    res.json(await publishWeeklyReport({ dryRun: req.body?.dryRun === true }));
+  })
+);
 
 // ---------- status & settings ----------
 api.get(

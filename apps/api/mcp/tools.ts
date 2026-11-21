@@ -271,6 +271,12 @@ export const TOOLS = [
     },
   },
   {
+    name: 'weekly_report',
+    description: 'Preview the previous Monday–Sunday research report from local data only. Uses zero YouTube quota.',
+    annotations: { readOnlyHint: true },
+    inputSchema: { type: 'object', properties: { channelId: { type: 'string' } } },
+  },
+  {
     name: 'portfolio',
     description:
       "Every channel you own on one board: views and subs this week vs last, the latest upload's pace and CTR, monetization progress, open alerts, autopilot activity, today's top idea. weekly=true also returns (and phones) the weekly summary text.",
@@ -574,6 +580,8 @@ export function createToolRunner(call) {
         if (a.sync) await call('POST', `/api/reach/${encodeURIComponent(id)}/sync`, {});
         return call('GET', `/api/reach/${encodeURIComponent(id)}?days=${a.days || 28}`);
       }
+      case 'weekly_report':
+        return call('GET', `/api/reports/weekly${q({ channelId: a.channelId })}`);
       case 'portfolio':
         return a.weekly ? call('POST', '/api/portfolio/weekly-summary', { send: true }) : call('GET', '/api/portfolio');
       case 'best_publish_time': {
