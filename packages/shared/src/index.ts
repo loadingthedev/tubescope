@@ -228,3 +228,4 @@ export interface ChannelSyncResponse {
 }
 
 export type * from './research-index';
+export type * from './ranks';
