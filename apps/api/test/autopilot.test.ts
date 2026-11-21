@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startMock, calls, REPORTING, TITLE_OVERRIDES } from './mock-youtube.ts';
+import { freePort } from './free-port.ts';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const FAKE_CLAUDE = path.join(ROOT, 'test', 'fake-claude.ts');
@@ -59,7 +60,7 @@ before(async () => {
   });
   await new Promise(r => hook.listen(0, '127.0.0.1', r));
   hookPort = hook.address().port;
-  const port = 5400 + Math.floor(Math.random() * 300);
+  const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   const M = `http://127.0.0.1:${mock.port}`;
   child = spawn(process.execPath, ['src/server.ts'], {

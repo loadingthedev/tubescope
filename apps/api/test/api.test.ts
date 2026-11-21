@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startMock, calls, EL } from './mock-youtube.ts';
+import { freePort } from './free-port.ts';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-api-'));
 let mock, child, base;
@@ -36,7 +37,7 @@ const ok = async (p, o?) => {
 
 before(async () => {
   mock = await startMock(0);
-  const port = 4900 + Math.floor(Math.random() * 90);
+  const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(path.dirname(new URL(import.meta.url).pathname), '..'),

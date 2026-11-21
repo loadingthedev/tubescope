@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { NavLink, Route, Routes } from 'react-router';
 import type { QuotaResponse } from '@tubescope/shared';
 import { getJson } from './api';
-import { Keywords } from './Keywords';
+import { Keywords } from './keywords';
 import { Outliers } from './outliers';
 import { Competitors } from './competitors';
 
