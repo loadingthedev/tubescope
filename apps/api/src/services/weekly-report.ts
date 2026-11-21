@@ -4,6 +4,11 @@ import { median } from './stats.ts';
 import * as notion from './notion.ts';
 
 const DAY = 86400000;
+// A prolific channel has a low median, so it can fill every slot; cap it so other competitors show up.
+const perChannel = (rows, limit: number, cap = 3) => {
+  const seen: Record<string, number> = {};
+  return rows.filter(v => (seen[v.channel_id] = (seen[v.channel_id] || 0) + 1) <= cap).slice(0, limit);
+};
 const shift = (day: string, days: number) => new Date(Date.parse(day) + days * DAY).toISOString().slice(0, 10);
 const n = (value: number) => value.toLocaleString('en-US');
 const escapeMarkdown = (s: string) =>
@@ -136,17 +141,20 @@ export function buildWeeklyReport(channelId?: string, { now = new Date() }: { no
         .all(c.id)
         .map(r => r.id)
     );
-    const breakouts = ranked(scored.filter(v => competitors.has(v.channel_id) && inWeek(v.published_at) && v.x !== null && v.x >= 3)).slice(0, 10);
+    const breakouts = perChannel(ranked(scored.filter(v => competitors.has(v.channel_id) && inWeek(v.published_at) && v.x !== null && v.x >= 3)), 10);
     if (!breakouts.length) add('paragraph', 'No competitor breakouts this week.');
     breakouts.forEach(v => videoLine(v, true));
     add('heading_3', 'Outliers worth copying');
     const excluded = new Set(breakouts.map(v => v.id));
-    const outliers = ranked(
-      scored.filter(v => {
-        const published = Date.parse(v.published_at);
-        return published >= now.getTime() - 30 * DAY && published <= now.getTime() && v.x !== null && v.x >= 3 && !excluded.has(v.id);
-      })
-    ).slice(0, 10);
+    const outliers = perChannel(
+      ranked(
+        scored.filter(v => {
+          const published = Date.parse(v.published_at);
+          return published >= now.getTime() - 30 * DAY && published <= now.getTime() && v.x !== null && v.x >= 3 && !excluded.has(v.id);
+        })
+      ),
+      10
+    );
     if (!outliers.length) add('paragraph', 'No other local outliers in the last 30 days.');
     outliers.forEach(v => videoLine(v, true));
     add('heading_3', 'Radar alerts this week');
