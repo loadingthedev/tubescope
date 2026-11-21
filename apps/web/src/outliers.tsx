@@ -126,7 +126,7 @@ function TopicSearch() {
       <form className="search-form filters" onSubmit={submit}>
         <label>
           Topic
-          <input name="q" type="search" placeholder="e.g. medicaid for parents" required maxLength={200} />
+          <input name="q" type="search" placeholder="e.g. beginner photography" required maxLength={200} />
         </label>
         <label>
           Period

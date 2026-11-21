@@ -5,6 +5,7 @@ import { getJson } from './api';
 import { Keywords } from './keywords';
 import { Outliers } from './outliers';
 import { Competitors } from './competitors';
+import { Dashboard } from './dashboard';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
@@ -44,7 +45,7 @@ function ComingSoon({ name, hash = '' }: { name: string; hash?: string }) {
     <section className="placeholder">
       <p className="eyebrow">Research desk</p>
       <h1>{name}</h1>
-      <p>Coming soon — use the classic UI</p>
+      <p>This page is unavailable. Use the navigation or open the classic UI.</p>
       <a className="classic-link" href={`${classicUrl}${hash}`}>
         Open classic UI <span aria-hidden="true">↗</span>
       </a>
@@ -83,7 +84,7 @@ export function App() {
         </header>
         <main id="main-content">
           <Routes>
-            <Route path="/" element={<ComingSoon name="Dashboard" />} />
+            <Route path="/" element={<Dashboard />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />

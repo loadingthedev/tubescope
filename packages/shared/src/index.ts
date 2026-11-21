@@ -173,3 +173,56 @@ export interface CompetitorAlert {
   created_at: string;
   payload: { videoId?: string; channelId?: string };
 }
+
+export type ChannelHistoryResponse = { day: string; views: number; subs: number; videos: number }[];
+export interface PerformanceSegment {
+  median: number;
+  breakout: Video[];
+  above: Video[];
+  typical: number;
+  under: Video[];
+}
+export interface ChannelSegmentsResponse {
+  long: PerformanceSegment;
+  shorts: PerformanceSegment;
+}
+export interface ChannelVideosResponse {
+  total: number;
+  videos: Video[];
+}
+export interface ChannelScoreResponse {
+  channelId: string;
+  score: number;
+  grade: string;
+  advice: string;
+  components: Record<string, number>;
+  weights: Record<string, number>;
+  sample: { videos: number; recent90d: number; snapshotDays: number };
+}
+export interface DashboardIdea {
+  id: number;
+  best_title: string;
+  angle: string;
+  score: number | null;
+  predicted_x: number | null;
+}
+export type IdeasResponse = DashboardIdea[];
+export type AnalyticsMetric =
+  | 'views'
+  | 'estimatedMinutesWatched'
+  | 'averageViewDuration'
+  | 'averageViewPercentage'
+  | 'subscribersGained'
+  | 'subscribersLost'
+  | 'likes'
+  | 'comments'
+  | 'shares';
+export interface AnalyticsOverviewResponse {
+  totals: Partial<Record<AnalyticsMetric, number>>;
+  delta: Partial<Record<AnalyticsMetric, number | null>>;
+  daily: { day: string; views: number }[];
+}
+export interface ChannelSyncResponse {
+  synced: number;
+  metadataChanges: number;
+}
