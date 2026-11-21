@@ -1,3 +1,4 @@
+import { Boards } from './boards';
 import { Comments } from './comments';
 import { Packaging } from './packaging';
 import { Analytics } from './analytics';
@@ -39,6 +40,7 @@ const navigation = [
       { to: '/outliers', label: 'Outliers', glyph: '↗' },
       { to: '/index', label: 'Outlier index', glyph: '▦' },
       { to: '/trending', label: 'Trending & niches', glyph: '⌁' },
+      { to: '/boards', label: 'Boards & blueprints', glyph: '▦' },
     ],
   },
   {
@@ -136,6 +138,7 @@ export function App() {
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/packaging" element={<Packaging />} />
             <Route path="/comments" element={<Comments />} />
+            <Route path="/boards" element={<Boards />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
