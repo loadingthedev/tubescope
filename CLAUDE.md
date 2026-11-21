@@ -20,7 +20,7 @@ Private MIT fork, taken at upstream commit 3503111. See README.md for upstream c
 
 - Bun 1.4.5 for runtime, package manager, workspaces, and tests. Development checks require Bun 1.4.6-canary until 1.4.6 stable ships. Keep `packageManager` at `bun@1.4.5` and Docker pinned to `oven/bun:1.4.5-slim`. API database: `bun:sqlite`.
 - `apps/api/`: `src/`, `mcp/`, `test/`, and unchanged legacy `public/`. API package: `@tubescope/api`.
-- `apps/web/`: React 19, Vite, React Router, React Query, Tailwind CSS v4. Package: `@tubescope/web`.
+- `apps/web/`: React 19, Vite, TanStack Router (code-based routes in `src/router.tsx`, basepath `/app`), React Query, Tailwind CSS v4, shadcn/ui (radix-nova, lucide; components in `src/components/ui`, add more with `bunx --bun shadcn@latest add <name>`). Package: `@tubescope/web`. Design tokens and the `eyebrow`/`num`/`grid-paper` utilities live in `src/styles.css`; red pencil (`--pencil`, `OutlierMark`) is reserved for outliers.
 - `packages/shared/`: `@tubescope/shared` response types, imported with `import type` by both apps. No runtime code or build.
 - Root `bun install`; `bun run dev` runs API watch mode (:4949) and Vite (:5173/app/). Vite proxies `/api` and `/data` to :4949.
 - `bun run build` builds web assets. `bun start` runs the API with classic UI at `/` and React preview at `/app` (SPA fallback). Build web first. Leave legacy UI files unchanged until React reaches parity.

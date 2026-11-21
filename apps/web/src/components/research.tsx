@@ -1,29 +1,49 @@
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { RotateCw } from 'lucide-react';
 import type { ChannelsResponse } from '@tubescope/shared';
 import { getJson } from '../api';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs as UITabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
-export function PageHeader({ title, description, section = title }: { title: string; description: string; section?: string }) {
+export function PageHeader({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
   return (
-    <div className="page-heading">
-      <p className="eyebrow">Discovery / {section}</p>
-      <h1>{title}</h1>
-      <p>{description}</p>
-    </div>
+    <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex max-w-2xl flex-col gap-1.5">
+        <h1 className="text-[28px] leading-tight font-semibold">{title}</h1>
+        <p className="text-muted-foreground">{description}</p>
+      </div>
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+    </header>
   );
 }
+
+export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('grid grid-cols-2 gap-3 lg:grid-cols-4', className)}>{children}</div>;
+}
+
 export function StatCard({ label, value, note, accent = false }: { label: string; value: ReactNode; note: string; accent?: boolean }) {
   return (
-    <div>
-      <span>{label}</span>
-      <strong className={accent ? 'accent' : undefined}>{value}</strong>
-      <p>{note}</p>
-    </div>
+    <Card size="sm">
+      <CardHeader>
+        <p className="eyebrow">{label}</p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1">
+        <strong className={cn('num text-2xl font-medium tracking-tight', accent && 'text-primary')}>{value}</strong>
+        <CardDescription className="text-xs">{note}</CardDescription>
+      </CardContent>
+    </Card>
   );
 }
+
 export function Table({ children, caption }: { children: ReactNode; caption: string }) {
   return (
-    <div className="table-scroll">
+    <div className="data-table">
       <table>
         <caption className="sr-only">{caption}</caption>
         {children}
@@ -31,27 +51,36 @@ export function Table({ children, caption }: { children: ReactNode; caption: str
     </div>
   );
 }
+
 export function QueryError({ error, retry }: { error: Error; retry: () => void }) {
   return (
-    <div role="alert" className="error-message">
-      <p>{error.message}</p>
-      <button type="button" className="text-button" onClick={retry}>
-        Try again
-      </button>
-    </div>
+    <Alert variant="destructive">
+      <AlertTitle>Couldn't load this</AlertTitle>
+      <AlertDescription>{error.message}</AlertDescription>
+      <AlertAction>
+        <Button variant="outline" size="sm" onClick={retry}>
+          <RotateCw data-icon="inline-start" />
+          Try again
+        </Button>
+      </AlertAction>
+    </Alert>
   );
 }
+
 export function Tabs({ labels, value, onChange }: { labels: string[]; value: string; onChange: (value: string) => void }) {
   return (
-    <div className="tabs" role="group" aria-label="Sections">
-      {labels.map(label => (
-        <button key={label} type="button" aria-pressed={label === value} className={label === value ? 'active' : ''} onClick={() => onChange(label)}>
-          {label}
-        </button>
-      ))}
-    </div>
+    <UITabs value={value} onValueChange={onChange}>
+      <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
+        {labels.map(label => (
+          <TabsTrigger key={label} value={label}>
+            {label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </UITabs>
   );
 }
+
 export function useOwnedChannel() {
   const channels = useQuery({ queryKey: ['channels'], queryFn: ({ signal }) => getJson<ChannelsResponse>('/channels', signal) });
   const [selected, setSelected] = useState<string>(() => {
@@ -70,17 +99,27 @@ export function useOwnedChannel() {
   }
   return { channels, owned, current, select };
 }
+
 export function ChannelSelect({ channel }: { channel: ReturnType<typeof useOwnedChannel> }) {
   return (
-    <label className="channel-select">
-      Owned channel
-      <select value={channel.current?.id || ''} onChange={event => channel.select(event.target.value)}>
-        {channel.owned.map(item => (
-          <option key={item.id} value={item.id}>
-            {item.title}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="flex items-center gap-2">
+      <Label htmlFor="owned-channel" className="eyebrow">
+        Channel
+      </Label>
+      <Select value={channel.current?.id || ''} onValueChange={channel.select}>
+        <SelectTrigger id="owned-channel" className="min-w-52 bg-card">
+          <SelectValue placeholder="Pick a channel" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {channel.owned.map(item => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.title}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
