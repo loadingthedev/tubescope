@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startMock, calls, EL } from './mock-youtube.ts';
+import { freePort } from './free-port.ts';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-api-'));
 let mock, child, base;
@@ -36,7 +37,7 @@ const ok = async (p, o?) => {
 
 before(async () => {
   mock = await startMock(0);
-  const port = 4900 + Math.floor(Math.random() * 90);
+  const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(path.dirname(new URL(import.meta.url).pathname), '..'),
@@ -689,4 +690,65 @@ test('similar channels + Studio overlay scoring endpoint', async () => {
   const guide = await (await fetch(base + '/api/agent')).text();
   assert.ok(/media\/voiceover/.test(guide) && /media\/thumbnails/.test(guide) && /similar-channels/.test(guide));
   assert.equal((await ok('/status')).version, '2.1.0');
+});
+
+test('topic baseline separates formats, excludes itself, handles small samples and caches uploads', async () => {
+  const plain = await ok('/outliers/search?q=baseline-test');
+  assert.equal('baselinePartial' in plain, false);
+  assert.equal('outlierX' in plain.results[0], false);
+  const response = await ok('/outliers/search?q=baseline-test&baseline=1');
+  assert.equal(response.baselinePartial, false);
+  const owner = response.results.filter(v => v.channel_id === OWNER);
+  const uploads = await ok(`/channels/${OWNER}/videos?limit=100`);
+  for (const video of owner) {
+    const sample = uploads.videos.filter(v => v.id !== video.id && !v.is_live && v.is_short === video.is_short);
+    const views = sample.map(v => v.view_count).sort((a, b) => a - b);
+    const middle = Math.floor(views.length / 2);
+    const med = views.length % 2 ? views[middle] : (views[middle - 1] + views[middle]) / 2;
+    assert.equal(video.baselineSample, sample.length);
+    assert.equal(video.channelMedianViews, med);
+    assert.equal(video.outlierX, sample.length < 5 ? null : video.view_count / med);
+  }
+  assert.ok(owner.some(v => v.outlierX === null));
+  assert.ok(owner.some(v => v.outlierX > 0));
+  const baselineCalls = () => calls.filter(call => !call.path.endsWith('/search')).length;
+  const count = baselineCalls();
+  await ok('/outliers/search?q=baseline-test&baseline=1');
+  assert.equal(baselineCalls(), count, 'baseline cache makes no second uploads or stats API request');
+});
+
+test('topic baselines stay available from cache when quota is low', async () => {
+  const quota = await ok('/quota');
+  const settings = await ok('/settings');
+  try {
+    await ok('/settings', { method: 'PUT', body: { yt_quota_limit: String(quota.today.units + 600), yt_quota_reserve: '500' } });
+    const response = await ok('/outliers/search?q=baseline-low-cached&baseline=1');
+    assert.equal(response.baselinePartial, false);
+    assert.ok(response.results.some(video => video.outlierX > 0));
+  } finally {
+    await ok('/settings', {
+      method: 'PUT',
+      body: { yt_quota_limit: settings.yt_quota_limit || '10000', yt_quota_reserve: settings.yt_quota_reserve || '500' },
+    });
+  }
+});
+
+test('topic search returns partial baselines instead of failing at the quota reserve', async () => {
+  await ok('/cache/clear', { method: 'POST', body: { prefix: 'outlier-baseline:' } });
+  const quota = await ok('/quota');
+  const settings = await ok('/settings');
+  const count = calls.filter(call => call.path.endsWith('/playlistItems')).length;
+  try {
+    await ok('/settings', { method: 'PUT', body: { yt_quota_limit: String(quota.today.units + 600), yt_quota_reserve: '500' } });
+    const response = await ok('/outliers/search?q=baseline-low-uncached&baseline=1');
+    assert.equal(response.baselinePartial, true);
+    assert.ok(response.results.length > 0);
+    assert.ok(response.results.every(video => video.outlierX === null && video.baselineSample === 0 && video.channelMedianViews === null));
+    assert.equal(calls.filter(call => call.path.endsWith('/playlistItems')).length, count);
+  } finally {
+    await ok('/settings', {
+      method: 'PUT',
+      body: { yt_quota_limit: settings.yt_quota_limit || '10000', yt_quota_reserve: settings.yt_quota_reserve || '500' },
+    });
+  }
 });

@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startMock, calls } from './mock-youtube.ts';
+import { freePort } from './free-port.ts';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-remote-'));
@@ -45,8 +46,8 @@ before(async () => {
     });
   });
   await new Promise(r => hook.listen(0, '127.0.0.1', r));
-  const port = 6500 + Math.floor(Math.random() * 400),
-    pport = port + 1;
+  const port = await freePort(),
+    pport = await freePort();
   local = `http://127.0.0.1:${port}`;
   pub = `http://127.0.0.1:${pport}`;
   const M = `http://127.0.0.1:${mock.port}`;

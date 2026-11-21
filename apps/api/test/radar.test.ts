@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startMock } from './mock-youtube.ts';
+import { freePort } from './free-port.ts';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const FAKE_CLAUDE = path.join(ROOT, 'test', 'fake-claude.ts');
@@ -37,7 +38,7 @@ const ok = async (p, o?) => {
 
 before(async () => {
   mock = await startMock(0);
-  const port = 5100 + Math.floor(Math.random() * 300);
+  const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['src/server.ts'], {
     cwd: ROOT,

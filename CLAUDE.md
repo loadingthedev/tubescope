@@ -10,6 +10,10 @@ Private MIT fork, taken at upstream commit 3503111. See README.md for upstream c
 - Estimates must be labelled as estimates. Never present a made-up number as data (no fake search volume).
 - Quota: searches have their own 100/day limit; everything else shares 10,000 units/day.
 
+## Conventions
+
+- File names are kebab-case (`video-table.tsx`, `outliers.tsx`), including React components. Component identifiers inside stay PascalCase.
+
 ## Layout and run
 
 - Bun 1.4.5 for runtime, package manager, workspaces, and tests. Development checks require Bun 1.4.6-canary until 1.4.6 stable ships. Keep `packageManager` at `bun@1.4.5` and Docker pinned to `oven/bun:1.4.5-slim`. API database: `bun:sqlite`.

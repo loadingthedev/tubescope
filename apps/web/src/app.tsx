@@ -2,7 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { NavLink, Route, Routes } from 'react-router';
 import type { QuotaResponse } from '@tubescope/shared';
 import { getJson } from './api';
-import { Keywords } from './Keywords';
+import { Keywords } from './keywords';
+import { Outliers } from './outliers';
+import { Competitors } from './competitors';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
@@ -83,8 +85,8 @@ export function App() {
           <Routes>
             <Route path="/" element={<ComingSoon name="Dashboard" />} />
             <Route path="/keywords" element={<Keywords />} />
-            <Route path="/outliers" element={<ComingSoon name="Outliers" hash="#/outliers" />} />
-            <Route path="/competitors" element={<ComingSoon name="Competitors" hash="#/competitors" />} />
+            <Route path="/outliers" element={<Outliers />} />
+            <Route path="/competitors" element={<Competitors />} />
             <Route path="*" element={<ComingSoon name="Page not found" />} />
           </Routes>
         </main>

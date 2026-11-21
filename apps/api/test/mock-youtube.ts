@@ -664,7 +664,7 @@ export function startMock(port = 0) {
       const n = Math.min(CH[chId]?.videos || 0, 60);
       const page = Number(q.pageToken || 0);
       const items = [];
-      for (let i = page * 50; i < Math.min(n, page * 50 + 50); i++) items.push({ contentDetails: { videoId: vid(chId, i).id } });
+      for (let i = page * 50; i < Math.min(n, page * 50 + Number(q.maxResults || 50)); i++) items.push({ contentDetails: { videoId: vid(chId, i).id } });
       return json({ items, nextPageToken: (page + 1) * 50 < n ? String(page + 1) : undefined });
     }
     if (u.pathname.endsWith('/videos')) {

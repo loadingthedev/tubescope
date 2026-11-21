@@ -466,6 +466,7 @@ api.get(
         maxSubscribers: req.query.maxSubs ? Number(req.query.maxSubs) : null,
         format: req.query.format || 'all',
         order: req.query.order || 'viewCount',
+        baseline: req.query.baseline === '1',
       })
     )
   )

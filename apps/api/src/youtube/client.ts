@@ -165,7 +165,7 @@ export function quotaHistory(days = 14) {
     .all(days);
 }
 
-function assertQuota(units, { essential = false }: { essential?: boolean } = {}) {
+export function assertQuota(units, { essential = false }: { essential?: boolean } = {}) {
   const q = quotaToday();
   if (q.exhausted)
     throw new YouTubeError(

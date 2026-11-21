@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { startMock, calls, IMG, EL } from './mock-youtube.ts';
+import { freePort } from './free-port.ts';
 
 const ROOT = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'td-growth-'));
@@ -79,7 +80,7 @@ before(async () => {
   EL.mp3 = gen(['-f', 'lavfi', '-i', 'sine=frequency=220:duration=6', '-c:a', 'libmp3lame', '-b:a', '64k'], path.join(dataDir, 'voice.mp3'));
   mock = await startMock(0);
   M = `http://127.0.0.1:${mock.port}`;
-  const port = 7300 + Math.floor(Math.random() * 300);
+  const port = await freePort();
   base = `http://127.0.0.1:${port}`;
   const env = {
     ...process.env,

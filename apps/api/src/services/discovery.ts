@@ -1,7 +1,7 @@
-import type { KeywordExploreResponse, KeywordCompetitionResponse } from '@tubescope/shared';
+import type { KeywordExploreResponse, KeywordCompetitionResponse, OutlierSearchResponse } from '@tubescope/shared';
 // Keyword research, outliers, trending, niche exploration — built on search.list, suggest, and local data.
 import { db, today, getSetting } from '../db.ts';
-import { ytGet, suggest, DEFAULT_TTL } from '../youtube/client.ts';
+import { ytGet, suggest, DEFAULT_TTL, cacheGet, cacheSet, assertQuota, YouTubeError } from '../youtube/client.ts';
 import { fetchVideosByIds, fetchChannelsByIds, hydrateVideo } from './channels.ts';
 import { median, mean, daysSince, clamp } from './stats.ts';
 
@@ -206,8 +206,9 @@ export async function searchOutliers(
     format = 'all',
     order = 'viewCount',
     sample = 50,
-  }: { country?: string; publishedWithinDays?: number; maxSubscribers?: number; format?: string; order?: string; sample?: number } = {}
-) {
+    baseline = false,
+  }: { country?: string; publishedWithinDays?: number; maxSubscribers?: number; format?: string; order?: string; sample?: number; baseline?: boolean } = {}
+): Promise<OutlierSearchResponse> {
   const publishedAfter = new Date(Date.now() - publishedWithinDays * 86400000).toISOString();
   const params: Record<string, string | number> = {
     part: 'snippet',
@@ -245,10 +246,54 @@ export async function searchOutliers(
       breakout_score: Math.round(Math.log10(1 + subsRatio) * 40 + Math.log10(1 + v.view_count / age) * 10),
     };
   });
+  const baselines = new Map();
+  let baselinePartial = false;
+  if (baseline) {
+    for (const channelId of new Set(rows.map(v => v.channel_id))) {
+      const key = (short: boolean) => `outlier-baseline:${channelId}:${short ? 'shorts' : 'long'}`;
+      const formats = new Set(rows.filter(v => v.channel_id === channelId).map(v => v.is_short));
+      for (const short of formats) {
+        const hit = cacheGet(key(short));
+        if (hit) baselines.set(key(short), hit);
+      }
+      if ([...formats].every(short => baselines.has(key(short)))) continue;
+      try {
+        assertQuota(2);
+        const playlistId = chMap[channelId]?.uploads_playlist;
+        if (!playlistId) {
+          baselinePartial = true;
+          continue;
+        }
+        const uploads = await ytGet('playlistItems.list', { part: 'contentDetails', playlistId, maxResults: 30 }, { ttl: DEFAULT_TTL.uploads });
+        const recent = await fetchVideosByIds([...new Set((uploads.items || []).map(v => v.contentDetails?.videoId).filter(Boolean))]);
+        for (const short of [false, true]) {
+          const sample = recent.filter(v => v.channel_id === channelId && !v.is_live && v.is_short === short).map(v => ({ id: v.id, views: v.view_count }));
+          cacheSet(key(short), sample, 24 * 3600);
+          baselines.set(key(short), sample);
+        }
+      } catch (error) {
+        if (!(error instanceof YouTubeError) || !['quotaGuard', 'quotaExceeded', 'dailyLimitExceeded'].includes(error.reason || '')) throw error;
+        baselinePartial = true;
+      }
+    }
+  }
   return {
+    ...(baseline ? { baselinePartial } : {}),
     query,
     sampleSize: rows.length,
-    results: rows.sort((a, b) => b.breakout_score - a.breakout_score),
+    results: rows
+      .sort((a, b) => b.breakout_score - a.breakout_score)
+      .map(v => {
+        if (!baseline) return v;
+        const sample = baselines.get(`outlier-baseline:${v.channel_id}:${v.is_short ? 'shorts' : 'long'}`)?.filter(item => item.id !== v.id);
+        const channelMedianViews = sample?.length ? median(sample.map(item => item.views)) : null;
+        return {
+          ...v,
+          channelMedianViews,
+          baselineSample: sample?.length ?? 0,
+          outlierX: sample?.length >= 5 && channelMedianViews > 0 ? v.view_count / channelMedianViews : null,
+        };
+      }),
     source: 'search.list sample ranked by views ÷ channel subscribers (breakout) and views per day (velocity)',
   };
 }

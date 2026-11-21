@@ -1,21 +1,11 @@
+import { format } from './components/format';
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KeywordCompetitionResponse, KeywordDemandResponse, KeywordExploreResponse, SettingsResponse } from '@tubescope/shared';
 import { getJson } from './api';
 
-const format = (value: number | null) => (value === null ? '—' : value.toLocaleString());
+import { PageHeader, StatCard, Table, QueryError } from './components/research';
 const percent = (value: number) => `${Math.round(value * 100)}%`;
-
-function QueryError({ error, retry }: { error: Error; retry: () => void }) {
-  return (
-    <div role="alert" className="error-message">
-      <p>{error.message}</p>
-      <button type="button" className="text-button" onClick={retry}>
-        Try again
-      </button>
-    </div>
-  );
-}
 
 function Suggestions({ title, items }: { title: string; items: string[] }) {
   return (
@@ -48,64 +38,52 @@ function Competition({ data }: { data: KeywordCompetitionResponse }) {
         <span>{data.sampleSize} results</span>
       </div>
       <div className="metrics">
-        <div>
-          <span>Opportunity score</span>
-          <strong className="accent">
-            {data.opportunityScore}
-            <small>/100</small>
-          </strong>
-          <p>Higher = more room</p>
-        </div>
-        <div>
-          <span>Median views</span>
-          <strong>{format(data.medianViews)}</strong>
-          <p>Top results</p>
-        </div>
-        <div>
-          <span>Median channel size</span>
-          <strong>{format(data.medianChannelSubs)}</strong>
-          <p>Subscribers</p>
-        </div>
-        <div>
-          <span>Results under 90 days</span>
-          <strong>{percent(data.recentShare)}</strong>
-          <p>Fresh content ranking</p>
-        </div>
+        <StatCard
+          label="Opportunity score"
+          accent
+          value={
+            <>
+              {data.opportunityScore}
+              <small>/100</small>
+            </>
+          }
+          note="Higher = more room"
+        />
+        <StatCard label="Median views" value={format(data.medianViews)} note="Top results" />
+        <StatCard label="Median channel size" value={format(data.medianChannelSubs)} note="Subscribers" />
+        <StatCard label="Results under 90 days" value={percent(data.recentShare)} note="Fresh content ranking" />
       </div>
       <p className="muted evidence-detail">
         Small channels: {percent(data.smallChannelShare)} · Exact title matches: {percent(data.exactTitleShare)}
       </p>
-      <div className="table-scroll">
-        <table>
-          <caption className="sr-only">Top search results, sorted by views</caption>
-          <thead>
-            <tr>
-              <th scope="col">Video</th>
-              <th scope="col">Channel</th>
-              <th scope="col">Views</th>
-              <th scope="col">Subscribers</th>
-              <th scope="col">Age (days)</th>
-              <th scope="col">Views/day</th>
+      <Table caption="Top search results, sorted by views">
+        <thead>
+          <tr>
+            <th scope="col">Video</th>
+            <th scope="col">Channel</th>
+            <th scope="col">Views</th>
+            <th scope="col">Subscribers</th>
+            <th scope="col">Age (days)</th>
+            <th scope="col">Views/day</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.results.map(video => (
+            <tr key={video.id}>
+              <td>
+                <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`} target="_blank" rel="noreferrer">
+                  {video.title}
+                </a>
+              </td>
+              <td>{video.channel_title}</td>
+              <td>{format(video.view_count)}</td>
+              <td>{format(video.channel_subs)}</td>
+              <td>{video.age_days}</td>
+              <td>{format(Math.round(video.vpd))}</td>
             </tr>
-          </thead>
-          <tbody>
-            {data.results.map(video => (
-              <tr key={video.id}>
-                <td>
-                  <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`} target="_blank" rel="noreferrer">
-                    {video.title}
-                  </a>
-                </td>
-                <td>{video.channel_title}</td>
-                <td>{format(video.view_count)}</td>
-                <td>{format(video.channel_subs)}</td>
-                <td>{video.age_days}</td>
-                <td>{format(Math.round(video.vpd))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          ))}
+        </tbody>
+      </Table>
       {!data.results.length ? <p className="muted">No results returned for this seed.</p> : null}
       <details className="method">
         <summary>Scoring method & source</summary>
@@ -243,11 +221,7 @@ export function Keywords() {
 
   return (
     <div className="keywords-page">
-      <div className="page-heading">
-        <p className="eyebrow">Discovery / Keywords</p>
-        <h1>Keyword research</h1>
-        <p>Find search ideas. Check the evidence before choosing a topic.</p>
-      </div>
+      <PageHeader section="Keywords" title="Keyword research" description="Find search ideas. Check the evidence before choosing a topic." />
       <form className="search-form" onSubmit={submit}>
         <label htmlFor="seed">Seed keyword</label>
         <div className="search-row">
