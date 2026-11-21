@@ -8,6 +8,7 @@ import { Competitors } from './competitors';
 import { Dashboard } from './dashboard';
 
 import { Channels } from './channels';
+import { Library, VideoDetail } from './library';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
@@ -16,6 +17,7 @@ const navigation = [
     items: [
       { to: '/', label: 'Dashboard', glyph: '◫' },
       { to: '/channels', label: 'Channels', glyph: '◉' },
+      { to: '/library', label: 'Video library', glyph: '▤' },
     ],
   },
   {
@@ -111,6 +113,8 @@ export function App() {
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
             <Route path="/channels" element={<Channels />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/library/:videoId" element={<VideoDetail />} />
             <Route path="*" element={<ComingSoon name="Page not found" />} />
           </Routes>
         </main>
