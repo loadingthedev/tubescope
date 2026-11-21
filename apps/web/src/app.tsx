@@ -7,12 +7,36 @@ import { Outliers } from './outliers';
 import { Competitors } from './competitors';
 import { Dashboard } from './dashboard';
 
+import { Channels } from './channels';
+import { Library, VideoDetail } from './library';
+import { Settings } from './settings';
+import { Health } from './health';
+
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [
-  { to: '/', label: 'Dashboard', glyph: '◫' },
-  { to: '/keywords', label: 'Keywords', glyph: '⌕' },
-  { to: '/outliers', label: 'Outliers', glyph: '↗' },
-  { to: '/competitors', label: 'Competitors', glyph: '◉' },
+  {
+    label: 'Desk',
+    items: [
+      { to: '/', label: 'Dashboard', glyph: '◫' },
+      { to: '/channels', label: 'Channels', glyph: '◉' },
+      { to: '/library', label: 'Video library', glyph: '▤' },
+    ],
+  },
+  {
+    label: 'Research',
+    items: [
+      { to: '/keywords', label: 'Keywords', glyph: '⌕' },
+      { to: '/outliers', label: 'Outliers', glyph: '↗' },
+    ],
+  },
+  { label: 'Watch', items: [{ to: '/competitors', label: 'Competitors', glyph: '◉' }] },
+  {
+    label: 'System',
+    items: [
+      { to: '/settings', label: 'Settings', glyph: '⚙' },
+      { to: '/health', label: 'Health', glyph: '♡' },
+    ],
+  },
 ];
 
 function Quota() {
@@ -63,13 +87,18 @@ export function App() {
           </span>
           Tubescope<span className="preview-label">Preview</span>
         </a>
-        <p className="nav-label">WORKSPACE</p>
+
         <nav aria-label="Main navigation">
-          {navigation.map(item => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <span aria-hidden="true">{item.glyph}</span>
-              {item.label}
-            </NavLink>
+          {navigation.map(group => (
+            <div key={group.label}>
+              <p className="nav-label">{group.label}</p>
+              {group.items.map(item => (
+                <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                  <span aria-hidden="true">{item.glyph}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="sidebar-foot">
@@ -88,6 +117,11 @@ export function App() {
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
+            <Route path="/channels" element={<Channels />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/library/:videoId" element={<VideoDetail />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/health" element={<Health />} />
             <Route path="*" element={<ComingSoon name="Page not found" />} />
           </Routes>
         </main>
