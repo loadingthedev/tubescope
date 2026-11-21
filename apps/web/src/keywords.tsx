@@ -1,38 +1,63 @@
-import { format } from './components/format';
 import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowUpRight, ChevronRight, Search, Users } from 'lucide-react';
 import type { KeywordCompetitionResponse, KeywordDemandResponse, KeywordExploreResponse, RelatedTag, SettingsResponse } from '@tubescope/shared';
 import { getJson } from './api';
+import { format } from './components/format';
+import { PageHeader, QueryError, StatCard, StatGrid, Table } from './components/research';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 
-import { PageHeader, StatCard, Table, QueryError } from './components/research';
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
-function Suggestions({ title, items }: { title: string; items: string[] }) {
+function Suggestions({ title, items, onExplore }: { title: string; items: string[]; onExplore: (keyword: string) => void }) {
   return (
-    <section className="suggestions">
-      <div className="section-heading">
-        <h2>{title}</h2>
-        <span>{items.length}</span>
-      </div>
-      {items.length ? (
-        <ul>
-          {items.map(item => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted">No suggestions returned. Try another seed.</p>
-      )}
-    </section>
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardAction>
+          <span className="num text-xs text-muted-foreground">{items.length}</span>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {items.length ? (
+          <ul className="-mx-2 flex flex-col">
+            {items.map(item => (
+              <li key={item}>
+                <button
+                  type="button"
+                  onClick={() => onExplore(item)}
+                  className="group flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                >
+                  {item}
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">No suggestions returned. Try another seed.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
 function RelatedTags({ tags, sampleSize, onExplore }: { tags: RelatedTag[]; sampleSize: number; onExplore: (keyword: string) => void }) {
   return (
-    <section className="related-tags" aria-label="Related keywords from tags">
-      <div className="section-heading">
-        <h2>Keywords the top videos use</h2>
-        <span>{tags.length}</span>
+    <section className="flex flex-col gap-3" aria-label="Related keywords from tags">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-lg font-semibold">Keywords the top videos use</h3>
+        <span className="num text-xs text-muted-foreground">{tags.length}</span>
       </div>
       {tags.length ? (
         <Table caption={`Tags shared by at least two channels in the top ${sampleSize} results`}>
@@ -48,9 +73,9 @@ function RelatedTags({ tags, sampleSize, onExplore }: { tags: RelatedTag[]; samp
             {tags.map(t => (
               <tr key={t.tag}>
                 <td>
-                  <button type="button" className="text-button" onClick={() => onExplore(t.tag)}>
+                  <Button variant="link" className="h-auto p-0" onClick={() => onExplore(t.tag)}>
                     {t.tag}
-                  </button>
+                  </Button>
                 </td>
                 <td>{t.channels}</td>
                 <td>{t.videos}</td>
@@ -60,7 +85,7 @@ function RelatedTags({ tags, sampleSize, onExplore }: { tags: RelatedTag[]; samp
           </tbody>
         </Table>
       ) : (
-        <p className="muted">No tag is shared by two or more ranking channels for this seed.</p>
+        <p className="text-sm text-muted-foreground">No tag is shared by two or more ranking channels for this seed.</p>
       )}
     </section>
   );
@@ -68,67 +93,81 @@ function RelatedTags({ tags, sampleSize, onExplore }: { tags: RelatedTag[]; samp
 
 function Competition({ data, onExplore }: { data: KeywordCompetitionResponse; onExplore: (keyword: string) => void }) {
   return (
-    <section className="competition" aria-label="Competition evidence">
-      <div className="section-heading">
-        <div>
+    <section className="flex flex-col gap-4" aria-label="Competition evidence">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div className="flex flex-col gap-1">
           <p className="eyebrow">Search sample · {data.country}</p>
-          <h2>Competition evidence</h2>
+          <h2 className="text-xl font-semibold">Competition evidence</h2>
         </div>
-        <span>{data.sampleSize} results</span>
+        <span className="num text-xs text-muted-foreground">{data.sampleSize} results</span>
       </div>
-      <div className="metrics">
+      <StatGrid>
         <StatCard
           label="Opportunity score"
           accent
           value={
             <>
               {data.opportunityScore}
-              <small>/100</small>
+              <small className="text-sm text-muted-foreground">/100</small>
             </>
           }
-          note="Higher = more room"
+          note="Higher means more room"
         />
         <StatCard label="Median views" value={format(data.medianViews)} note="Top results" />
         <StatCard label="Median channel size" value={format(data.medianChannelSubs)} note="Subscribers" />
         <StatCard label="Results under 90 days" value={percent(data.recentShare)} note="Fresh content ranking" />
-      </div>
-      <p className="muted evidence-detail">
-        Small channels: {percent(data.smallChannelShare)} · Exact title matches: {percent(data.exactTitleShare)}
+      </StatGrid>
+      <p className="text-sm text-muted-foreground">
+        Small channels: <span className="num">{percent(data.smallChannelShare)}</span> · Exact title matches:{' '}
+        <span className="num">{percent(data.exactTitleShare)}</span>
       </p>
-      <Table caption="Top search results, sorted by views">
-        <thead>
-          <tr>
-            <th scope="col">Video</th>
-            <th scope="col">Channel</th>
-            <th scope="col">Views</th>
-            <th scope="col">Subscribers</th>
-            <th scope="col">Age (days)</th>
-            <th scope="col">Views/day</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.results.map(video => (
-            <tr key={video.id}>
-              <td>
-                <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`} target="_blank" rel="noreferrer">
-                  {video.title}
-                </a>
-              </td>
-              <td>{video.channel_title}</td>
-              <td>{format(video.view_count)}</td>
-              <td>{format(video.channel_subs)}</td>
-              <td>{video.age_days}</td>
-              <td>{format(Math.round(video.vpd))}</td>
+      {data.results.length ? (
+        <Table caption="Top search results, sorted by views">
+          <thead>
+            <tr>
+              <th scope="col">Video</th>
+              <th scope="col">Channel</th>
+              <th scope="col">Views</th>
+              <th scope="col">Subscribers</th>
+              <th scope="col">Age (days)</th>
+              <th scope="col">Views/day</th>
             </tr>
-          ))}
-        </tbody>
-      </Table>
-      {!data.results.length ? <p className="muted">No results returned for this seed.</p> : null}
+          </thead>
+          <tbody>
+            {data.results.map(video => (
+              <tr key={video.id}>
+                <td className="max-w-[26rem] min-w-64">
+                  <a
+                    className="line-clamp-2 font-medium"
+                    href={`https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {video.title}
+                  </a>
+                </td>
+                <td className="text-muted-foreground">{video.channel_title}</td>
+                <td>{format(video.view_count)}</td>
+                <td>{format(video.channel_subs)}</td>
+                <td>{video.age_days}</td>
+                <td>{format(Math.round(video.vpd))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      ) : (
+        <p className="text-sm text-muted-foreground">No results returned for this seed.</p>
+      )}
       <RelatedTags tags={data.relatedTags} sampleSize={data.sampleSize} onExplore={onExplore} />
-      <details className="method">
-        <summary>Scoring method & source</summary>
-        <p>{data.formula}</p>
-        <p>{data.source}</p>
+      <details className="group rounded-lg border bg-card px-4 py-3 text-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 font-medium [&::-webkit-details-marker]:hidden">
+          <ChevronRight aria-hidden="true" className="size-4 transition-transform group-open:rotate-90" />
+          Scoring method and source
+        </summary>
+        <div className="mt-2 flex flex-col gap-2 pl-5.5 text-muted-foreground">
+          <p>{data.formula}</p>
+          <p>{data.source}</p>
+        </div>
       </details>
     </section>
   );
@@ -169,39 +208,56 @@ type Research = ReturnType<typeof useKeywordResearch>;
 
 function DemandResult({ demand }: Pick<Research, 'demand'>) {
   if (demand.isError) return <QueryError error={demand.error} retry={() => void demand.refetch()} />;
-  if (!demand.data) return <p className="muted">Loading demand signals…</p>;
+  if (!demand.data)
+    return (
+      <Card role="status">
+        <CardContent className="flex items-center gap-5">
+          <span className="sr-only">Loading demand signals…</span>
+          <Skeleton className="h-12 w-20" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        </CardContent>
+      </Card>
+    );
   return (
-    <>
-      <div className="demand-score">
-        {demand.data.demandIndex}
-        <small>/100</small>
-      </div>
-      <div>
-        <h2>
-          Demand index <span className="muted">· {demand.data.band}</span>
-        </h2>
-        <p>{demand.data.note}</p>
-      </div>
-    </>
+    <Card>
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+        <p className="num shrink-0 text-5xl leading-none font-medium text-primary">
+          {demand.data.demandIndex}
+          <small className="text-base text-muted-foreground">/100</small>
+        </p>
+        <div className="flex flex-col gap-1">
+          <h3 className="flex flex-wrap items-center gap-2 text-base font-semibold">
+            Demand index
+            <Badge variant="secondary">{demand.data.band}</Badge>
+          </h3>
+          <p className="text-sm text-muted-foreground">{demand.data.note}</p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
-function ExploreResult({ explore }: Pick<Research, 'explore'>) {
+function ExploreResult({ explore, onExplore }: Pick<Research, 'explore'> & { onExplore: (keyword: string) => void }) {
   if (explore.isError) return <QueryError error={explore.error} retry={() => void explore.refetch()} />;
   if (!explore.data)
     return (
-      <p role="status" className="muted">
-        Reading autocomplete suggestions…
-      </p>
+      <div role="status" className="grid gap-4 md:grid-cols-2">
+        <span className="sr-only">Reading autocomplete suggestions…</span>
+        <Skeleton className="h-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
     );
   return (
-    <>
-      <div className="suggestion-columns">
-        <Suggestions title="Autocomplete" items={explore.data.autocomplete} />
-        <Suggestions title="Long-tail ideas" items={explore.data.longTail.map(item => item.keyword)} />
+    <div className="flex flex-col gap-2">
+      <div className="grid items-start gap-4 md:grid-cols-2">
+        <Suggestions title="Autocomplete" items={explore.data.autocomplete} onExplore={onExplore} />
+        <Suggestions title="Long-tail ideas" items={explore.data.longTail.map(item => item.keyword)} onExplore={onExplore} />
       </div>
-      <p className="source-note">{explore.data.source}</p>
-    </>
+      <p className="text-xs text-muted-foreground">{explore.data.source}</p>
+    </div>
   );
 }
 
@@ -221,23 +277,28 @@ function KeywordResults({
   const { explore, demand, competition } = research;
   return (
     <>
-      <div className="results-heading">
-        <h2>Results for “{search.seed}”</h2>
-        <span>{search.country}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-xl font-semibold">Results for “{search.seed}”</h2>
+        <Badge variant="outline" className="num">
+          {search.country}
+        </Badge>
       </div>
-      <section className="demand" aria-label="Demand index" aria-live="polite">
+      <section aria-label="Demand index" aria-live="polite">
         <DemandResult demand={demand} />
       </section>
-      <ExploreResult explore={explore} />
-      <div className="evidence-action">
-        <div>
-          <h2>Who already ranks?</h2>
-          <p>Competition evidence uses a real search sample. ≈102 API units per keyword, cached for 24 hours.</p>
-        </div>
-        <button type="button" className="secondary-button" disabled={competition.isFetching} onClick={requestEvidence}>
-          {competition.isFetching ? 'Checking…' : 'Competition evidence'}
-        </button>
-      </div>
+      <ExploreResult explore={explore} onExplore={onExplore} />
+      <Card>
+        <CardHeader>
+          <CardTitle>Who already ranks?</CardTitle>
+          <CardDescription>Competition evidence uses a real search sample. About 102 API units per keyword, cached for 24 hours.</CardDescription>
+          <CardAction>
+            <Button variant="outline" disabled={competition.isFetching} onClick={requestEvidence}>
+              {competition.isFetching ? <Spinner data-icon="inline-start" /> : <Users data-icon="inline-start" />}
+              {competition.isFetching ? 'Checking…' : 'Check competition'}
+            </Button>
+          </CardAction>
+        </CardHeader>
+      </Card>
       {showCompetition && competition.isError ? <QueryError error={competition.error} retry={() => void competition.refetch()} /> : null}
       {showCompetition && competition.data ? <Competition data={competition.data} onExplore={onExplore} /> : null}
     </>
@@ -268,34 +329,49 @@ export function Keywords() {
   }
 
   return (
-    <div className="keywords-page">
-      <PageHeader section="Keywords" title="Keyword research" description="Find search ideas. Check the evidence before choosing a topic." />
-      <form className="search-form" onSubmit={submit}>
-        <label htmlFor="seed">Seed keyword</label>
-        <div className="search-row">
-          <input
-            id="seed"
-            name="seed"
-            type="search"
-            value={seed}
-            onChange={event => setSeed(event.target.value)}
-            placeholder="e.g. beginner photography"
-            required
-            maxLength={200}
-          />
-          <button type="submit" className="primary-button" disabled={!seed.trim() || research.explore.isFetching}>
-            {' '}
-            {research.explore.isFetching ? 'Exploring…' : 'Explore'} <span aria-hidden="true">↗</span>
-          </button>
-        </div>
-        <p className="search-hint">YouTube autocomplete · No API quota used for exploration</p>
+    <>
+      <PageHeader title="Keyword research" description="Find search ideas. Check the evidence before choosing a topic." />
+      <form onSubmit={submit} className="max-w-2xl">
+        <Field>
+          <FieldLabel htmlFor="seed" className="sr-only">
+            Seed keyword
+          </FieldLabel>
+          <InputGroup className="h-11 bg-card shadow-paper">
+            <InputGroupAddon>
+              <Search />
+            </InputGroupAddon>
+            <InputGroupInput
+              id="seed"
+              name="seed"
+              type="search"
+              value={seed}
+              onChange={event => setSeed(event.target.value)}
+              placeholder="A seed keyword, e.g. history of everyday things"
+              required
+              maxLength={200}
+              className="text-base"
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton type="submit" variant="default" size="sm" disabled={!seed.trim() || research.explore.isFetching}>
+                {research.explore.isFetching ? <Spinner data-icon="inline-start" /> : null}
+                {research.explore.isFetching ? 'Exploring…' : 'Explore'}
+                {research.explore.isFetching ? null : <ArrowUpRight data-icon="inline-end" />}
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+          <FieldDescription className="text-xs">YouTube autocomplete · No API quota used for exploring</FieldDescription>
+        </Field>
       </form>
       {!search.seed ? (
-        <div className="empty-state">
-          <span aria-hidden="true">⌕</span>
-          <h2>Start with a seed</h2>
-          <p>A topic, a question, or a phrase your audience searches for.</p>
-        </div>
+        <Empty className="border border-dashed bg-card/60">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Search />
+            </EmptyMedia>
+            <EmptyTitle>Start with a seed</EmptyTitle>
+            <EmptyDescription>A topic, a question, or a phrase your audience searches for.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <KeywordResults
           search={search}
@@ -308,6 +384,6 @@ export function Keywords() {
           onExplore={exploreKeyword}
         />
       )}
-    </div>
+    </>
   );
 }

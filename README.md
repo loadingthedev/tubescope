@@ -7,7 +7,7 @@ It runs on your own machine. Public channel research uses the YouTube Data API. 
 ## Workspace layout
 
 - `apps/api/`: Bun + Express API, MCP server, backend tests, and unchanged classic UI in `public/`.
-- `apps/web/`: React 19 + Vite + React Router + React Query + Tailwind CSS v4.
+- `apps/web/`: React 19 + Vite + TanStack Router + React Query + Tailwind CSS v4 + shadcn/ui.
 - `packages/shared/`: API response types only; no runtime build.
 - `tsconfig.base.json`: shared compiler options. The new web and shared workspaces use strict checking; the existing API keeps its loose first-pass types.
 

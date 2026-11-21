@@ -1,6 +1,12 @@
+import { Inbox } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent, EmptyMedia } from '@/components/ui/empty';
+import { FieldGroup, Field, FieldLabel } from '@/components/ui/field';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router';
+import { Link } from '@tanstack/react-router';
 import type {
   AnalyticsOverview,
   AnalyticsVideo,
@@ -14,40 +20,55 @@ import type {
   AnalyticsRevenue,
 } from '@tubescope/shared';
 import { getJson } from './api';
-import { PageHeader, StatCard, Table, Tabs } from './components/research';
+import { PageHeader, StatCard, StatGrid, Table, Tabs } from './components/research';
 import { DataSection, OwnedPage } from './components/data-section';
 import { LineChart } from './components/line-chart';
 import { format, duration } from './components/format';
 
+const metricLabel = (key: string) =>
+  key === 'estimatedMinutesWatched' ? 'Watch minutes (est.)' : key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+
 function Rows({ title, rows, columns }: { title: string; rows: (string | number | null | undefined)[][]; columns: string[] }) {
   return (
-    <section className="dashboard-card">
-      <h2>{title}</h2>
-      {!rows.length ? (
-        <p>No rows available for this period. YouTube may withhold small samples.</p>
-      ) : (
-        <Table caption={title}>
-          <thead>
-            <tr>
-              {columns.map(c => (
-                <th scope="col" key={c}>
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => (
-              <tr key={JSON.stringify(row)}>
-                {row.map((v, j) => (
-                  <td key={columns[j]}>{typeof v === 'number' ? format(v) : (v ?? '—')}</td>
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex w-full flex-col gap-4">
+        {!rows.length ? (
+          <Empty className="w-full border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Inbox />
+              </EmptyMedia>
+              <EmptyTitle>No results</EmptyTitle>
+              <EmptyDescription>No rows available for this period. YouTube may withhold small samples.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <Table caption={title}>
+            <thead>
+              <tr>
+                {columns.map(c => (
+                  <th scope="col" key={c}>
+                    {c}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </Table>
-      )}
-    </section>
+            </thead>
+            <tbody>
+              {rows.map(row => (
+                <tr key={JSON.stringify(row)}>
+                  {row.map((v, j) => (
+                    <td key={columns[j]}>{typeof v === 'number' ? format(v) : (v ?? '—')}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 function Overview({ id, days }: { id: string; days: number }) {
@@ -62,22 +83,34 @@ function Overview({ id, days }: { id: string; days: number }) {
           <p>
             {data.source} · {data.period.startDate} → {data.period.endDate} · Reporting can lag about three days.
           </p>
-          <div className="metrics">
+          <StatGrid>
             {Object.entries(data.totals).map(([key, value]) => (
               <StatCard
                 key={key}
-                label={key === 'estimatedMinutesWatched' ? 'Watch minutes (est.)' : key}
+                label={metricLabel(key)}
                 value={key === 'averageViewDuration' ? duration(value) : format(value)}
                 note={`Previous: ${format(data.previous[key])} · change: ${data.delta[key] == null ? '—' : `${format(data.delta[key] * 100)}%`}`}
               />
             ))}
+          </StatGrid>
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily views</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LineChart label="Daily views" points={data.daily.map(d => ({ day: d.day, value: d.views }))} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Daily watch minutes (est.)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <LineChart label="Watch minutes (est.)" points={data.daily.map(d => ({ day: d.day, value: d.estimatedMinutesWatched }))} />
+              </CardContent>
+            </Card>
           </div>
-          <section className="dashboard-card">
-            <h2>Daily views</h2>
-            <LineChart label="Daily views" points={data.daily.map(d => ({ day: d.day, value: d.views }))} />
-            <h2>Daily watch minutes (est.)</h2>
-            <LineChart label="Watch minutes (est.)" points={data.daily.map(d => ({ day: d.day, value: d.estimatedMinutesWatched }))} />
-          </section>
         </>
       )}
     </DataSection>
@@ -99,70 +132,86 @@ function TopVideos({ id, days }: { id: string; days: number }) {
     <>
       <DataSection query={query}>
         {data => (
-          <section className="dashboard-card">
-            <h2>Top videos & retention</h2>
-            <Tabs labels={['All', 'Long-form', 'Shorts']} value={split} onChange={setSplit} />
-            <p>Format is available for synced videos. Unsynced formats remain in All.</p>
-            {!data.some(v => split === 'All' || (v.is_short != null && (split === 'Shorts' ? Boolean(v.is_short) : !v.is_short))) ? (
-              <p>No videos in this period and format.</p>
-            ) : (
-              <Table caption="Top videos">
-                <thead>
-                  <tr>
-                    {['Video', 'Views', 'Watch minutes (est.)', 'Avg duration', 'Avg %', 'Subs gained', 'Retention'].map(c => (
-                      <th scope="col" key={c}>
-                        {c}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data
-                    .filter(v => split === 'All' || (v.is_short != null && (split === 'Shorts' ? Boolean(v.is_short) : !v.is_short)))
-                    .map(v => (
-                      <tr key={v.video}>
-                        <th scope="row">
-                          <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(v.video)}`} target="_blank" rel="noreferrer">
-                            {v.title || v.video}
-                          </a>
+          <Card>
+            <CardHeader>
+              <CardTitle>Top videos & retention</CardTitle>
+            </CardHeader>
+            <CardContent className="flex w-full flex-col gap-4">
+              <Tabs labels={['All', 'Long-form', 'Shorts']} value={split} onChange={setSplit} />
+              <p>Format is available for synced videos. Unsynced formats remain in All.</p>
+              {!data.some(v => split === 'All' || (v.is_short != null && (split === 'Shorts' ? Boolean(v.is_short) : !v.is_short))) ? (
+                <Empty className="w-full border">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Inbox />
+                    </EmptyMedia>
+                    <EmptyTitle>No results</EmptyTitle>
+                    <EmptyDescription>No videos in this period and format.</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : (
+                <Table caption="Top videos">
+                  <thead>
+                    <tr>
+                      {['Video', 'Views', 'Watch minutes (est.)', 'Avg duration', 'Avg %', 'Subs gained', 'Retention'].map(c => (
+                        <th scope="col" key={c}>
+                          {c}
                         </th>
-                        <td>{format(v.views)}</td>
-                        <td>{format(v.estimatedMinutesWatched)}</td>
-                        <td>{duration(v.averageViewDuration)}</td>
-                        <td>{format(v.averageViewPercentage)}%</td>
-                        <td>{format(v.subscribersGained)}</td>
-                        <td>
-                          <button type="button" onClick={() => select(v.video)}>
-                            View retention
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </Table>
-            )}
-          </section>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data
+                      .filter(v => split === 'All' || (v.is_short != null && (split === 'Shorts' ? Boolean(v.is_short) : !v.is_short)))
+                      .map(v => (
+                        <tr key={v.video}>
+                          <th scope="row">
+                            <a href={`https://www.youtube.com/watch?v=${encodeURIComponent(v.video)}`} target="_blank" rel="noreferrer">
+                              {v.title || v.video}
+                            </a>
+                          </th>
+                          <td>{format(v.views)}</td>
+                          <td>{format(v.estimatedMinutesWatched)}</td>
+                          <td>{duration(v.averageViewDuration)}</td>
+                          <td>{format(v.averageViewPercentage)}%</td>
+                          <td>{format(v.subscribersGained)}</td>
+                          <td>
+                            <Button type="button" variant="outline" size="sm" onClick={() => select(v.video)}>
+                              View retention
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         )}
       </DataSection>
       {selected ? (
-        <section className="dashboard-card">
-          <h2>Retention · {selected}</h2>
-          <DataSection query={retention}>
-            {data => (
-              <>
-                <LineChart
-                  label="Audience watch ratio"
-                  points={data.curve.map(p => ({ day: `${format(p.elapsedVideoTimeRatio * 100)}% elapsed`, value: p.audienceWatchRatio * 100 }))}
-                />
-                <Rows
-                  title="Retention checkpoints"
-                  columns={['Checkpoint', 'Audience remaining %']}
-                  rows={Object.entries(data.checkpoints).map(([k, v]) => [k, v == null ? null : v * 100])}
-                />
-              </>
-            )}
-          </DataSection>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Retention · {selected}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex w-full flex-col gap-4">
+            <DataSection query={retention}>
+              {data => (
+                <>
+                  <LineChart
+                    label="Audience watch ratio"
+                    points={data.curve.map(p => ({ day: `${format(p.elapsedVideoTimeRatio * 100)}% elapsed`, value: p.audienceWatchRatio * 100 }))}
+                  />
+                  <Rows
+                    title="Retention checkpoints"
+                    columns={['Checkpoint', 'Audience remaining %']}
+                    rows={Object.entries(data.checkpoints).map(([k, v]) => [k, v == null ? null : v * 100])}
+                  />
+                </>
+              )}
+            </DataSection>
+          </CardContent>
+        </Card>
       ) : null}
     </>
   );
@@ -255,33 +304,41 @@ function Monetization({ id, days }: { id: string; days: number }) {
     <>
       <DataSection query={watch}>
         {d => (
-          <section className="dashboard-card">
-            <h2>Watch hours & YPP</h2>
-            <p>
-              {format(d.publicWatchHours)} watch hours (est.) / 4,000 · {format(d.subscribers)} subscribers / 1,000
-            </p>
-            <p>{d.note}</p>
-            <LineChart label="Daily watch hours (est.)" points={d.daily.map(r => ({ day: r.day, value: r.estimatedMinutesWatched / 60 }))} />
-          </section>
+          <Card>
+            <CardHeader>
+              <CardTitle>Watch hours & YPP</CardTitle>
+            </CardHeader>
+            <CardContent className="flex w-full flex-col gap-4">
+              <p>
+                {format(d.publicWatchHours)} watch hours (est.) / 4,000 · {format(d.subscribers)} subscribers / 1,000
+              </p>
+              <p>{d.note}</p>
+              <LineChart label="Daily watch hours (est.)" points={d.daily.map(r => ({ day: r.day, value: r.estimatedMinutesWatched / 60 }))} />
+            </CardContent>
+          </Card>
         )}
       </DataSection>
       <DataSection query={revenue}>
         {d => (
-          <section className="dashboard-card">
-            <h2>Revenue (est.)</h2>
-            {!d.available || !d.totals ? (
-              <p>
-                Revenue unavailable: {d.reason}. <Link to="/calculators">Open calculators</Link>
-              </p>
-            ) : (
-              <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Revenue (est.)</CardTitle>
+            </CardHeader>
+            <CardContent className="flex w-full flex-col gap-4">
+              {!d.available || !d.totals ? (
                 <p>
-                  Revenue (est.): ${format(d.totals.revenue)} · RPM (est.): ${format(d.totals.rpm)}
+                  Revenue unavailable: {d.reason}. <Link to="/calculators">Open calculators</Link>
                 </p>
-                <LineChart label="Daily revenue (est.)" points={d.daily.map(r => ({ day: r.day, value: r.estimatedRevenue }))} />
-              </>
-            )}
-          </section>
+              ) : (
+                <>
+                  <p>
+                    Revenue (est.): ${format(d.totals.revenue)} · RPM (est.): ${format(d.totals.rpm)}
+                  </p>
+                  <LineChart label="Daily revenue (est.)" points={d.daily.map(r => ({ day: r.day, value: r.estimatedRevenue }))} />
+                </>
+              )}
+            </CardContent>
+          </Card>
         )}
       </DataSection>
     </>
@@ -292,21 +349,37 @@ function ConnectedAnalytics({ id }: { id: string }) {
   const [tab, setTab] = useState('Overview');
   return (
     <>
-      <label>
-        Period
-        <select value={days} onChange={e => setDays(Number(e.target.value))}>
-          {[7, 28, 90, 365].map(d => (
-            <option key={d} value={d}>
-              Last {d} days
-            </option>
-          ))}
-        </select>
-      </label>
-      <p>
+      <FieldGroup>
+        <Field>
+          <FieldLabel id="analytics-1-label" htmlFor="analytics-1">
+            Period
+          </FieldLabel>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            className="flex-wrap"
+            id="analytics-1"
+            aria-labelledby="analytics-1-label"
+            value={String(days)}
+            onValueChange={value => {
+              if (value) {
+                setDays(Number(value));
+              }
+            }}
+          >
+            {[7, 28, 90, 365].map(d => (
+              <ToggleGroupItem key={d} value={String(d)}>
+                Last {d} days
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </Field>
+      </FieldGroup>
+      <Button asChild variant="link" className="self-start px-0">
         <a href={`/api/export/audit/${id}?days=${days}&save=0`} target="_blank" rel="noreferrer">
           Open non-AI audit export (JSON)
         </a>
-      </p>
+      </Button>
       <Tabs labels={['Overview', 'Traffic', 'Audience', 'Content types', 'Watch & revenue']} value={tab} onChange={setTab} />
       {tab === 'Overview' ? (
         <>
@@ -327,21 +400,27 @@ function ConnectedAnalytics({ id }: { id: string }) {
 }
 export function Analytics() {
   return (
-    <div className="research-page">
+    <>
       <PageHeader title="Analytics" description="Owner-authorized YouTube analytics. Read-only Google connection required." />
       <OwnedPage>
         {(id, authorized) =>
           authorized ? (
             <ConnectedAnalytics key={id} id={id} />
           ) : (
-            <section className="empty-state">
-              <h2>Connect with Google</h2>
-              <p>Connect this owned channel with Google to read owner analytics. Tubescope uses read-only access.</p>
-              <Link to="/channels">Open Channels</Link>
-            </section>
+            <Empty className="border bg-card">
+              <EmptyHeader>
+                <EmptyTitle>Connect with Google</EmptyTitle>
+                <EmptyDescription>Connect this owned channel with Google to read owner analytics. Tubescope uses read-only access.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button asChild>
+                  <Link to="/channels">Open Channels</Link>
+                </Button>
+              </EmptyContent>
+            </Empty>
           )
         }
       </OwnedPage>
-    </div>
+    </>
   );
 }

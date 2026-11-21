@@ -1,4 +1,17 @@
-import { useState, type FormEvent } from 'react';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Spinner } from '@/components/ui/spinner';
+import { SearchX } from 'lucide-react';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from '@/components/ui/empty';
+import { Field, FieldLabel, FieldGroup, FieldDescription, FieldSet, FieldLegend } from '@/components/ui/field';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useId, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ConfigResponse, ConfigUpdateResponse, SettingField } from '@tubescope/shared';
 import { getJson, mutateJson } from './api';
@@ -34,37 +47,75 @@ function validate(field: SettingField, value: string) {
   if (field.type === 'url' && value && !/^https?:\/\/[^\s]+$/i.test(value)) throw new Error(`${field.key}: enter an http(s) URL.`);
   if (value.length > 4000) throw new Error(`${field.key}: maximum 4000 characters.`);
 }
-function Field({ field, value, change }: { field: SettingField; value: string; change: (value: string) => void }) {
+function SettingControl({ field, value, change, invalid }: { field: SettingField; value: string; change: (value: string) => void; invalid: boolean }) {
+  const id = useId();
   const options = field.values?.filter(value => field.key !== 'notify_kinds' || !hiddenAlertKinds.has(value));
   return (
-    <label className="setting-field">
-      <span>{field.key}</span>
-      <small className="muted">{field.description}</small>
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor={id}>{field.key}</FieldLabel>
+      <FieldDescription id={`${id}-description`}>{field.description}</FieldDescription>
       {field.type === 'bool' ? (
-        <select value={value} onChange={event => change(event.target.value)}>
-          <option value="1">On</option>
-          <option value="0">Off</option>
-        </select>
-      ) : field.type === 'enum' ? (
-        <select value={value} onChange={event => change(event.target.value)}>
-          {options?.map(option => (
-            <option key={option} value={option}>
-              {option || '(blank)'}
-            </option>
-          ))}
-        </select>
-      ) : field.type === 'list' ? (
-        <select
-          multiple
-          value={value.split(',').filter(Boolean)}
-          onChange={event => change(Array.from(event.target.selectedOptions, option => option.value).join(','))}
+        <Switch id={id} aria-describedby={`${id}-description`} checked={value === '1'} onCheckedChange={checked => change(checked ? '1' : '0')} />
+      ) : field.type === 'enum' && options && options.length >= 2 && options.length <= 5 ? (
+        <ToggleGroup
+          id={id}
+          aria-label={field.key}
+          aria-describedby={`${id}-description`}
+          aria-invalid={invalid}
+          type="single"
+          variant="outline"
+          value={value || '__blank__'}
+          onValueChange={value => {
+            if (value) change(value === '__blank__' ? '' : value);
+          }}
         >
-          {options?.map(option => (
-            <option key={option}>{option}</option>
+          {options.map(option => (
+            <ToggleGroupItem key={option} value={option || '__blank__'}>
+              {option || '(blank)'}
+            </ToggleGroupItem>
           ))}
-        </select>
+        </ToggleGroup>
+      ) : field.type === 'enum' ? (
+        <Select value={value || '__blank__'} onValueChange={value => change(value === '__blank__' ? '' : value)}>
+          <SelectTrigger aria-invalid={invalid} id={id} aria-describedby={`${id}-description`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {options?.map(option => (
+                <SelectItem key={option} value={option || '__blank__'}>
+                  {option || '(blank)'}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      ) : field.type === 'list' ? (
+        <FieldSet aria-describedby={`${id}-description`}>
+          <FieldLegend className="sr-only">{field.key}</FieldLegend>
+          <FieldGroup>
+            {options?.map((option, index) => (
+              <Field key={option} orientation="horizontal">
+                <Checkbox
+                  id={`${id}-${index}`}
+                  checked={value.split(',').filter(Boolean).includes(option)}
+                  onCheckedChange={checked => {
+                    const selected = new Set(value.split(',').filter(Boolean));
+                    if (checked) selected.add(option);
+                    else selected.delete(option);
+                    change(options.filter(option => selected.has(option)).join(','));
+                  }}
+                />
+                <FieldLabel htmlFor={`${id}-${index}`}>{option}</FieldLabel>
+              </Field>
+            ))}
+          </FieldGroup>
+        </FieldSet>
       ) : (
-        <input
+        <Input
+          aria-invalid={invalid}
+          id={id}
+          aria-describedby={`${id}-description`}
           type={field.type === 'secret' ? 'password' : ['int', 'number'].includes(field.type) ? 'number' : 'text'}
           value={value}
           placeholder={field.type === 'secret' ? String(field.value) || 'Not set' : undefined}
@@ -78,10 +129,10 @@ function Field({ field, value, change }: { field: SettingField; value: string; c
         />
       )}
       {field.type === 'secret' ? (
-        <small className="muted">Stored value is masked. Only a changed value is sent. Clear the field after typing to remove the stored secret.</small>
+        <FieldDescription>Stored value is masked. Only a changed value is sent. Clear the field after typing to remove the stored secret.</FieldDescription>
       ) : null}
-      {field.type === 'cron' ? <small className="muted">Cron expressions are validated by the server before any changes are saved.</small> : null}
-    </label>
+      {field.type === 'cron' ? <FieldDescription>Cron expressions are validated by the server before any changes are saved.</FieldDescription> : null}
+    </Field>
   );
 }
 export function Settings() {
@@ -111,50 +162,70 @@ export function Settings() {
     save.mutate();
   }
   return (
-    <div className="settings-page">
+    <>
       <PageHeader title="Settings" description="Read-only YouTube research. Configure data access, research, notifications and your weekly Notion report." />
       {config.isError ? (
         <QueryError error={config.error} retry={() => void config.refetch()} />
       ) : config.isPending ? (
-        <p role="status">Loading settings…</p>
+        <div role="status" className="flex flex-col gap-2">
+          <span className="sr-only">Loading settings…</span>
+          <Skeleton className="h-24 w-full" />
+        </div>
       ) : (
-        <form onSubmit={submit}>
+        <form onSubmit={submit} className="flex flex-col gap-4">
           {config.data.groups.map(group => {
             const fields = config.data.settings.filter(field => field.group === group && visible(field));
             return fields.length ? (
-              <fieldset key={group} className="dashboard-card" disabled={save.isPending}>
-                <legend>{group === 'publishing' ? 'Time zone' : group}</legend>
-                <div className="settings-fields">
-                  {fields.map(field => (
-                    <Field
-                      key={field.key}
-                      field={field}
-                      value={changes[field.key] ?? (field.type === 'secret' ? '' : String(field.value))}
-                      change={value => {
-                        setMessage('');
-                        setChanges(previous => ({ ...previous, [field.key]: value }));
-                      }}
-                    />
-                  ))}
-                </div>
-              </fieldset>
+              <Card key={group}>
+                <CardHeader>
+                  <CardTitle>{group === 'publishing' ? 'Time zone' : group}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <fieldset disabled={save.isPending}>
+                    <legend className="sr-only">{group === 'publishing' ? 'Time zone' : group}</legend>
+                    <FieldGroup>
+                      {fields.map(field => (
+                        <SettingControl
+                          key={field.key}
+                          field={field}
+                          invalid={save.isError && save.error.message.startsWith(`${field.key}:`)}
+                          value={changes[field.key] ?? (field.type === 'secret' ? '' : String(field.value))}
+                          change={value => {
+                            setMessage('');
+                            setChanges(previous => ({ ...previous, [field.key]: value }));
+                          }}
+                        />
+                      ))}
+                    </FieldGroup>
+                  </fieldset>
+                </CardContent>
+              </Card>
             ) : null;
           })}
           {!config.data.settings.some(visible) ? (
-            <p>No settings available.</p>
+            <Empty className="border bg-card">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchX />
+                </EmptyMedia>
+                <EmptyTitle>No results</EmptyTitle>
+                <EmptyDescription>No settings available.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
-            <button className="primary-button" disabled={save.isPending || !Object.keys(changes).length}>
+            <Button disabled={save.isPending || !Object.keys(changes).length}>
+              {save.isPending ? <Spinner data-icon="inline-start" /> : null}
               {save.isPending ? 'Saving…' : 'Save changes'}
-            </button>
+            </Button>
           )}
         </form>
       )}
       {message ? <p role="status">{message}</p> : null}
       {save.isError ? (
-        <p role="alert" className="error-message">
-          {save.error.message}
-        </p>
+        <Alert variant="destructive">
+          <AlertDescription>{save.error.message}</AlertDescription>
+        </Alert>
       ) : null}
-    </div>
+    </>
   );
 }

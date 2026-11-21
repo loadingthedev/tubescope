@@ -1,166 +1,290 @@
-import { Calculators } from './calculators';
-import { Portfolio } from './portfolio';
-import { Boards } from './boards';
-import { Comments } from './comments';
-import { Packaging } from './packaging';
-import { Analytics } from './analytics';
 import { useQuery } from '@tanstack/react-query';
-import { NavLink, Route, Routes } from 'react-router';
+import { Link, Outlet, useRouterState, type LinkProps } from '@tanstack/react-router';
+import {
+  Bookmark,
+  Calculator,
+  ChartLine,
+  Clapperboard,
+  Database,
+  ExternalLink,
+  Flame,
+  HeartPulse,
+  LayoutDashboard,
+  LayoutGrid,
+  ListOrdered,
+  MessagesSquare,
+  Monitor,
+  Moon,
+  PenLine,
+  Radar,
+  Search,
+  Settings,
+  Sun,
+  TrendingUp,
+  Tv,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
+import { useTheme } from 'next-themes';
 import type { QuotaResponse } from '@tubescope/shared';
 import { getJson } from './api';
-import { Keywords } from './keywords';
-import { Outliers } from './outliers';
-import { Competitors } from './competitors';
-import { Dashboard } from './dashboard';
-import { OutlierIndex } from './outlier-index';
-import { Ranks } from './ranks';
-import { Trending } from './trending';
-import { Radar } from './radar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { Channels } from './channels';
-import { Library, VideoDetail } from './library';
-import { Settings } from './settings';
-import { Health } from './health';
+export const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 
-const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
-const navigation = [
+type NavItem = { to: Exclude<LinkProps['to'], undefined>; label: string; icon: LucideIcon };
+const navigation: { label: string; items: NavItem[] }[] = [
   {
     label: 'Desk',
     items: [
-      { to: '/', label: 'Dashboard', glyph: '◫' },
-      { to: '/channels', label: 'Channels', glyph: '◉' },
-      { to: '/library', label: 'Video library', glyph: '▤' },
-      { to: '/analytics', label: 'Analytics', glyph: '▥' },
-      { to: '/packaging', label: 'Packaging', glyph: '▧' },
-      { to: '/comments', label: 'Comments', glyph: '☷' },
-      { to: '/portfolio', label: 'All channels', glyph: '◉' },
+      { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/channels', label: 'Channels', icon: Tv },
+      { to: '/library', label: 'Video library', icon: Clapperboard },
+      { to: '/analytics', label: 'Analytics', icon: ChartLine },
+      { to: '/packaging', label: 'Packaging', icon: PenLine },
+      { to: '/comments', label: 'Comments', icon: MessagesSquare },
+      { to: '/portfolio', label: 'All channels', icon: LayoutGrid },
     ],
   },
   {
     label: 'Research',
     items: [
-      { to: '/keywords', label: 'Keywords', glyph: '⌕' },
-      { to: '/outliers', label: 'Outliers', glyph: '↗' },
-      { to: '/index', label: 'Outlier index', glyph: '▦' },
-      { to: '/trending', label: 'Trending & niches', glyph: '⌁' },
-      { to: '/boards', label: 'Boards & blueprints', glyph: '▦' },
-      { to: '/calculators', label: 'Calculators', glyph: '≡' },
+      { to: '/keywords', label: 'Keywords', icon: Search },
+      { to: '/outliers', label: 'Outliers', icon: TrendingUp },
+      { to: '/index', label: 'Outlier index', icon: Database },
+      { to: '/trending', label: 'Trending & niches', icon: Flame },
+      { to: '/boards', label: 'Boards & blueprints', icon: Bookmark },
+      { to: '/calculators', label: 'Calculators', icon: Calculator },
     ],
   },
   {
     label: 'Watch',
     items: [
-      { to: '/competitors', label: 'Competitors', glyph: '◉' },
-      { to: '/ranks', label: 'Rank tracker', glyph: '≡' },
-      { to: '/radar', label: 'Virality radar', glyph: '◎' },
+      { to: '/competitors', label: 'Competitors', icon: Users },
+      { to: '/ranks', label: 'Rank tracker', icon: ListOrdered },
+      { to: '/radar', label: 'Virality radar', icon: Radar },
     ],
   },
   {
     label: 'System',
     items: [
-      { to: '/settings', label: 'Settings', glyph: '⚙' },
-      { to: '/health', label: 'Health', glyph: '♡' },
+      { to: '/settings', label: 'Settings', icon: Settings },
+      { to: '/health', label: 'Health', icon: HeartPulse },
     ],
   },
 ];
 
-function Quota() {
+const isActive = (pathname: string, to: string) => (to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`));
+
+function currentPage(pathname: string) {
+  for (const group of navigation) for (const item of group.items) if (isActive(pathname, item.to)) return { group: group.label, label: item.label };
+  return null;
+}
+
+/* An ink dot circled in red pencil: what this desk is for. */
+function BrandMark() {
+  return (
+    <svg viewBox="0 0 32 32" className="size-7 shrink-0" aria-hidden="true">
+      <rect width="32" height="32" rx="7" className="fill-primary" />
+      <circle cx="16" cy="16.5" r="3.2" className="fill-primary-foreground" />
+      <path
+        d="M24.5 12.2c-1.6-3.4-6.4-5-10.6-3.6C9 10.2 6.6 14.6 8.2 18.6c1.7 4.2 7.5 5.9 11.9 3.9 3.6-1.7 5.5-5.4 4.4-8.6"
+        fill="none"
+        stroke="var(--pencil)"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function AppSidebar() {
+  const pathname = useRouterState({ select: state => state.location.pathname });
+  const { setOpenMobile } = useSidebar();
+  return (
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild tooltip="Tubescope">
+              <Link to="/">
+                <BrandMark />
+                <span className="flex flex-col leading-tight">
+                  <span className="font-heading text-[15px] font-semibold tracking-tight">Tubescope</span>
+                  <span className="eyebrow text-[10px]">Research desk</span>
+                </span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent>
+        {navigation.map(group => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel className="eyebrow">{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map(item => (
+                  <SidebarMenuItem key={item.to}>
+                    <SidebarMenuButton asChild isActive={isActive(pathname, item.to)} tooltip={item.label}>
+                      <Link to={item.to} onClick={() => setOpenMobile(false)}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+      </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Classic UI">
+              <a href={classicUrl}>
+                <ExternalLink />
+                <span>Classic UI</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
+  );
+}
+
+function QuotaMeter() {
   const quota = useQuery({ queryKey: ['quota'], queryFn: ({ signal }) => getJson<QuotaResponse>('/quota', signal), refetchInterval: 60_000 });
+  if (quota.isError)
+    return (
+      <Button variant="ghost" size="sm" onClick={() => void quota.refetch()}>
+        Quota unavailable · Retry
+      </Button>
+    );
+  const today = quota.data?.today;
+  const used = today ? (today.units / today.limit) * 100 : 0;
   return (
-    <div className="quota" aria-live="polite">
-      <span className="status-dot" />
-      <span>API quota today</span>
-      {quota.data ? (
-        <>
-          <strong>
-            {quota.data.today.units.toLocaleString()} / {quota.data.today.limit.toLocaleString()}
-          </strong>
-          <span className="quota-note">{quota.data.today.remaining.toLocaleString()} remaining</span>
-        </>
-      ) : (
-        <strong>{quota.isError ? 'Unavailable' : 'Loading…'}</strong>
-      )}
-      {quota.isError ? (
-        <button type="button" className="text-button" onClick={() => void quota.refetch()}>
-          Retry
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function ComingSoon({ name, hash = '' }: { name: string; hash?: string }) {
-  return (
-    <section className="placeholder">
-      <p className="eyebrow">Research desk</p>
-      <h1>{name}</h1>
-      <p>This page is unavailable. Use the navigation or open the classic UI.</p>
-      <a className="classic-link" href={`${classicUrl}${hash}`}>
-        Open classic UI <span aria-hidden="true">↗</span>
-      </a>
-    </section>
-  );
-}
-
-export function App() {
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <a className="brand" href="/app/">
-          <span className="brand-mark" aria-hidden="true">
-            t
-          </span>
-          Tubescope<span className="preview-label">Preview</span>
-        </a>
-
-        <nav aria-label="Main navigation">
-          {navigation.map(group => (
-            <div key={group.label}>
-              <p className="nav-label">{group.label}</p>
-              {group.items.map(item => (
-                <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-                  <span aria-hidden="true">{item.glyph}</span>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
-        <div className="sidebar-foot">
-          <span>Read-only research</span>
-          <a href={classicUrl}>Classic UI ↗</a>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="flex items-center gap-3 rounded-md px-2 py-1" tabIndex={0} aria-live="polite">
+          <span className="eyebrow hidden sm:inline">API quota</span>
+          <div className="flex w-14 flex-col gap-1 sm:w-28">
+            <span className="num hidden text-xs sm:inline">{today ? `${today.units.toLocaleString()} / ${today.limit.toLocaleString()}` : 'Loading…'}</span>
+            <Progress value={used} aria-label="API quota used today" className="h-1" />
+          </div>
         </div>
-      </aside>
-      <div className="workspace">
-        <header className="workspace-header">
-          <span className="header-label">YOUTUBE RESEARCH DESK</span>
-          <Quota />
+      </TooltipTrigger>
+      <TooltipContent>
+        {today ? `${today.remaining.toLocaleString()} units left today. Searches have their own limit of 100 a day.` : 'Reading quota…'}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Change theme">
+          <Sun className="dark:hidden" />
+          <Moon className="hidden dark:block" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Theme</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+            <DropdownMenuRadioItem value="light">
+              <Sun /> Paper
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark">
+              <Moon /> Blueprint
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="system">
+              <Monitor /> Match system
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function AppShell() {
+  const pathname = useRouterState({ select: state => state.location.pathname });
+  const page = currentPage(pathname);
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="grid-paper min-w-0">
+        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
+          <p className="flex min-w-0 items-baseline gap-2 text-sm">
+            {page ? <span className="eyebrow">{page.group}</span> : null}
+            <span className="truncate font-medium">{page?.label ?? 'Tubescope'}</span>
+          </p>
+          <div className="ml-auto flex items-center gap-1">
+            <QuotaMeter />
+            <ThemeSwitch />
+          </div>
         </header>
-        <main id="main-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/packaging" element={<Packaging />} />
-            <Route path="/comments" element={<Comments />} />
-            <Route path="/boards" element={<Boards />} />
-            <Route path="/portfolio" element={<Portfolio />} />
-            <Route path="/calculators" element={<Calculators />} />
-            <Route path="/keywords" element={<Keywords />} />
-            <Route path="/outliers" element={<Outliers />} />
-            <Route path="/competitors" element={<Competitors />} />
-            <Route path="/channels" element={<Channels />} />
-            <Route path="/library" element={<Library />} />
-            <Route path="/library/:videoId" element={<VideoDetail />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/health" element={<Health />} />
-            <Route path="/index" element={<OutlierIndex />} />
-            <Route path="/ranks" element={<Ranks />} />
-            <Route path="/trending" element={<Trending />} />
-            <Route path="/radar" element={<Radar />} />
-            <Route path="*" element={<ComingSoon name="Page not found" />} />
-          </Routes>
+        <main id="main-content" className="mx-auto flex w-full max-w-[1360px] flex-col gap-8 px-4 py-8 md:px-8">
+          <Outlet />
         </main>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+export function NotFound() {
+  return (
+    <Empty className="border bg-card">
+      <EmptyHeader>
+        <EmptyTitle>Page not found</EmptyTitle>
+        <EmptyDescription>This address isn't part of the desk. Pick a page from the sidebar, or open the classic UI.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button asChild variant="outline">
+          <a href={classicUrl}>
+            Open classic UI <ExternalLink data-icon="inline-end" />
+          </a>
+        </Button>
+      </EmptyContent>
+    </Empty>
   );
 }
