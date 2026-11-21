@@ -230,3 +230,4 @@ export interface ChannelSyncResponse {
 export type * from './research-index';
 export type * from './ranks';
 export type * from './trending';
+export type * from './radar';
