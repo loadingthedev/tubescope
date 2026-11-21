@@ -226,3 +226,5 @@ export interface ChannelSyncResponse {
   synced: number;
   metadataChanges: number;
 }
+
+export type * from './research-index';
