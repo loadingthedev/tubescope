@@ -1,0 +1,24 @@
+/* Local settings and calculators. */
+(() => {
+  const { view, api, h, state, err, toast, busy, fmt, fmtFull, pct, stat, raw, ls, copy } = TD;
+  view('/settings', async main => {
+    const { settings } = await api('/config');
+    main.innerHTML = h`<h1>Settings</h1><div class="note">Tubescope is read-only. Publish changes manually in YouTube Studio.</div><form id="settings" class="card form" style="margin-top:12px">${settings.map(s => h`<label class="f">${s.key}<div class="mini">${s.description}</div>${s.type === 'enum' ? h`<select data-key="${s.key}">${s.values.map(v => h`<option value="${v}" ${String(s.value) === v ? 'selected' : ''}>${v || '(blank)'}</option>`).join('')}</select>` : h`<input data-key="${s.key}" type="${s.type === 'secret' ? 'password' : 'text'}" value="${s.value}">`}</label>`).join('')}<button class="primary">Save</button></form>`;
+    main.querySelector('#settings').onsubmit = async e => {
+      e.preventDefault();
+      const button = e.target.querySelector('button'); busy(button, true);
+      try { await api('/config', { method: 'PUT', body: Object.fromEntries([...e.target.querySelectorAll('[data-key]')].map(el => [el.dataset.key, el.value])) }); toast('Saved', 'ok'); } catch (x) { err(x); }
+      busy(button, false);
+    };
+  });
+
+  view('/calculators', async (main) => {
+    const bands = await api('/calc/rpm-bands');
+    main.innerHTML = h`<div class="page-head"><div><h1>Calculators</h1><div class="sub">Scenario tools only — nothing here asserts your actual revenue or channel value. Real revenue: Analytics → Revenue (YPP channels).</div></div></div>
+      <div class="grid g2"><div class="card"><h2>Earnings scenario</h2><div class="form cols"><label class="f">Monthly views<input id="views" type="number" value="100000"></label><label class="f">Niche band<select id="niche">${Object.keys(bands).map(k => h`<option>${k}</option>`).join('')}</select></label><label class="f">RPM low ($)<input id="rlo" type="number" step="0.1" placeholder="band default"></label><label class="f">RPM high ($)<input id="rhi" type="number" step="0.1" placeholder="band default"></label><label class="f">Sponsor $ per video<input id="spon" type="number" value="0"></label><label class="f">Videos / month<input id="vpm" type="number" value="4"></label><label class="f">Affiliate $ per 1K views<input id="aff" type="number" step="0.1" value="0"></label></div><div class="row" style="margin-top:8px"><button id="calc" class="primary">Calculate</button></div><div id="out" style="margin-top:12px"></div></div>
+      <div class="card"><h2>Channel valuation scenario</h2><div class="form cols"><label class="f">Monthly profit ($)<input id="mrev" type="number" value="1000"></label><label class="f">Low multiple (months)<input id="mlo" type="number" value="24"></label><label class="f">High multiple (months)<input id="mhi" type="number" value="48"></label></div><div class="row" style="margin-top:8px"><button id="val" class="primary">Calculate</button></div><div id="vout" style="margin-top:12px"></div>
+        <h3 style="margin-top:16px">Typical RPM bands used</h3><table><tbody>${Object.entries(bands).map(([k, v]) => h`<tr><td>${k}</td><td class="num">$${v[0]} – $${v[1]}</td></tr>`).join('')}</tbody></table></div></div>`;
+    main.querySelector('#calc').onclick = async () => { const g = id => main.querySelector('#' + id).value; const d = await api('/calc/earnings', { method: 'POST', body: { views: Number(g('views')), niche: g('niche'), rpmLow: g('rlo') ? Number(g('rlo')) : null, rpmHigh: g('rhi') ? Number(g('rhi')) : null, sponsorPerVideo: Number(g('spon')), videosPerMonth: Number(g('vpm')), affiliateRpm: Number(g('aff')) } }); main.querySelector('#out').innerHTML = h`<div class="grid g3">${raw(stat('Ad revenue (low)', '$' + fmtFull(Math.round(d.adRevenue.low))))}${raw(stat('Ad revenue (mid)', '$' + fmtFull(Math.round(d.adRevenue.mid))))}${raw(stat('Ad revenue (high)', '$' + fmtFull(Math.round(d.adRevenue.high))))}</div><div class="grid g3" style="margin-top:8px">${raw(stat('Sponsorships', '$' + fmtFull(Math.round(d.sponsorships))))}${raw(stat('Affiliate', '$' + fmtFull(Math.round(d.affiliate))))}${raw(stat('Total range', '$' + fmtFull(Math.round(d.total.low)) + ' – $' + fmtFull(Math.round(d.total.high))))}</div><div class="note" style="margin-top:8px">${d.disclaimer}</div>`; };
+    main.querySelector('#val').onclick = async () => { const g = id => main.querySelector('#' + id).value; const d = await api('/calc/valuation', { method: 'POST', body: { monthlyRevenue: Number(g('mrev')), multipleLow: Number(g('mlo')), multipleHigh: Number(g('mhi')) } }); main.querySelector('#vout').innerHTML = h`<div class="grid g2">${raw(stat('Low', '$' + fmtFull(Math.round(d.low))))}${raw(stat('High', '$' + fmtFull(Math.round(d.high))))}</div><div class="note" style="margin-top:8px">${d.disclaimer}</div>`; };
+  });
+})();

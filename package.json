@@ -1,0 +1,21 @@
+{
+  "name": "tubescope",
+  "version": "2.1.0",
+  "description": "Self-hosted YouTube channel intelligence desk: analytics, keyword research, outliers, competitors, packaging, a calibrated virality radar, AI coaching and comment tools for channels you own.",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "start": "bun src/server.js",
+    "dev": "bun --watch src/server.js",
+    "test": "bun test --isolate --timeout 180000",
+    "snapshot": "bun src/jobs/run-snapshot.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "node-cron": "^3.0.3"
+  },
+  "packageManager": "bun@1.4.0"
+}

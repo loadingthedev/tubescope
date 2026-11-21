@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tubescope</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23e8503a'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<meta name="theme-color" content="#0f1115">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tubescope">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand"><span class="logo"></span><span>Tubescope</span><button id="menu-toggle" class="menu-toggle" aria-label="Menu" aria-expanded="false">☰</button></div>
+    <div class="channel-switch" id="channel-switch"></div>
+    <nav id="nav"></nav>
+    <div class="side-foot" id="side-foot"></div>
+  </aside>
+  <main id="main"><div class="loading">Loading…</div></main>
+  <div id="drawer" class="drawer hidden"><div class="drawer-inner" id="drawer-inner"></div></div>
+  <div id="toasts"></div>
+</div>
+<script src="/js/core.js"></script>
+<script src="/js/views-home.js"></script>
+<script src="/js/views-library.js"></script>
+<script src="/js/views-analytics.js"></script>
+<script src="/js/views-discovery.js"></script>
+<script src="/js/views-competitors.js"></script>
+<script src="/js/views-packaging.js"></script>
+<script src="/js/views-radar.js"></script>
+<script src="/js/views-portfolio.js"></script>
+<script src="/js/views-coach.js"></script>
+<script src="/js/views-community.js"></script>
+<script src="/js/views-settings.js"></script>
+<script src="/js/views-growth.js"></script>
+<script>TD.start();</script>
+</body>
+</html>
