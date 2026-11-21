@@ -6,6 +6,10 @@ import { Keywords } from './keywords';
 import { Outliers } from './outliers';
 import { Competitors } from './competitors';
 import { Dashboard } from './dashboard';
+import { OutlierIndex } from './outlier-index';
+import { Ranks } from './ranks';
+import { Trending } from './trending';
+import { Radar } from './radar';
 
 import { Channels } from './channels';
 import { Library, VideoDetail } from './library';
@@ -27,9 +31,18 @@ const navigation = [
     items: [
       { to: '/keywords', label: 'Keywords', glyph: '⌕' },
       { to: '/outliers', label: 'Outliers', glyph: '↗' },
+      { to: '/index', label: 'Outlier index', glyph: '▦' },
+      { to: '/trending', label: 'Trending & niches', glyph: '⌁' },
     ],
   },
-  { label: 'Watch', items: [{ to: '/competitors', label: 'Competitors', glyph: '◉' }] },
+  {
+    label: 'Watch',
+    items: [
+      { to: '/competitors', label: 'Competitors', glyph: '◉' },
+      { to: '/ranks', label: 'Rank tracker', glyph: '≡' },
+      { to: '/radar', label: 'Virality radar', glyph: '◎' },
+    ],
+  },
   {
     label: 'System',
     items: [
@@ -122,6 +135,10 @@ export function App() {
             <Route path="/library/:videoId" element={<VideoDetail />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/health" element={<Health />} />
+            <Route path="/index" element={<OutlierIndex />} />
+            <Route path="/ranks" element={<Ranks />} />
+            <Route path="/trending" element={<Trending />} />
+            <Route path="/radar" element={<Radar />} />
             <Route path="*" element={<ComingSoon name="Page not found" />} />
           </Routes>
         </main>

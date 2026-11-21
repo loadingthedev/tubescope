@@ -298,3 +298,7 @@ export interface ConfigUpdateResponse {
   changed: { key: string; value: string }[];
   yt_api_key?: string;
 }
+export type * from './research-index';
+export type * from './ranks';
+export type * from './trending';
+export type * from './radar';
