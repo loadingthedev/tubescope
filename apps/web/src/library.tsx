@@ -1,11 +1,21 @@
+import { SaveToBoard } from './components/save-to-board';
+import { CopyText, DataSection } from './components/data-section';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
-import type { ChannelSyncResponse, ChannelVideosResponse, VideoChecklistResponse, VideoDetailResponse } from '@tubescope/shared';
+import type {
+  ChannelSyncResponse,
+  ChannelVideosResponse,
+  VideoChecklistResponse,
+  VideoDetailResponse,
+  AgeComparisonResponse,
+  VideoScoresResponse,
+  ChannelSegmentsResponse,
+} from '@tubescope/shared';
 import { getJson, mutateJson } from './api';
 import { ChannelSelect, PageHeader, QueryError, StatCard, Table, Tabs, useOwnedChannel } from './components/research';
 import { LineChart } from './components/line-chart';
-import { duration, format, timestamp } from './components/format';
+import { duration, format, timestamp, times } from './components/format';
 
 function Checklist({ id }: { id: string }) {
   const checks = useQuery({
@@ -48,6 +58,52 @@ function Checklist({ id }: { id: string }) {
     </>
   );
 }
+function AgeComparison({ id }: { id: string }) {
+  const query = useQuery({
+    queryKey: ['age-comparison', id],
+    queryFn: ({ signal }) => getJson<AgeComparisonResponse | null>(`/videos/${encodeURIComponent(id)}/age-comparison`, signal),
+  });
+  return (
+    <DataSection query={query}>
+      {d =>
+        !d ? (
+          <p>No comparison available.</p>
+        ) : (
+          <>
+            <h2>Same-age comparison (est.)</h2>
+            <p>
+              Age: {format(d.ageDays)} days · views: {format(d.viewsNow)} · peer median (est.): {format(d.peerMedianAtSameAge)} · {times(d.index)}
+            </p>
+            <p>{d.note}</p>
+            {!d.peers.length ? (
+              <p>No same-format peers yet.</p>
+            ) : (
+              <Table caption="Same-age peers">
+                <thead>
+                  <tr>
+                    <th scope="col">Peer</th>
+                    <th scope="col">Views at age</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.peers.map(p => (
+                    <tr key={p.id}>
+                      <th scope="row">{p.title}</th>
+                      <td>
+                        {format(p.viewsAtAge)}
+                        {p.estimated ? ' (est.)' : ''}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </>
+        )
+      }
+    </DataSection>
+  );
+}
 export function VideoDetail() {
   const { videoId = '' } = useParams();
   const [tab, setTab] = useState('Overview');
@@ -79,12 +135,14 @@ export function VideoDetail() {
           Open on YouTube ↗
         </a>
       </p>
+      <CopyText text={data.title} label="Copy title" />
+      <SaveToBoard video={data} />
       <div className="metrics">
         <StatCard label="Views" value={format(data.view_count)} note="Latest synced count" />
         <StatCard label="Likes" value={format(data.like_count)} note="Latest synced count" />
         <StatCard label="Comments" value={format(data.comment_count)} note="Latest synced count" />
       </div>
-      <Tabs labels={owned ? ['Overview', 'Checklist', 'History'] : ['Overview', 'History']} value={tab} onChange={setTab} />
+      <Tabs labels={owned ? ['Overview', 'Checklist', 'History', 'Age comparison'] : ['Overview', 'History', 'Age comparison']} value={tab} onChange={setTab} />
       <section className="dashboard-card">
         {tab === 'Overview' ? (
           <>
@@ -93,6 +151,8 @@ export function VideoDetail() {
             <h2>Tags ({format(data.tags.length)})</h2>
             <p>{data.tags.join(', ') || 'No tags.'}</p>
           </>
+        ) : tab === 'Age comparison' ? (
+          <AgeComparison id={data.id} />
         ) : tab === 'Checklist' && owned ? (
           <Checklist id={data.id} />
         ) : (
@@ -133,7 +193,19 @@ export function VideoDetail() {
 }
 export function Library() {
   const channel = useOwnedChannel();
-  const [filters, setFilters] = useState({ q: '', format: 'all', sort: 'published_at', dir: 'desc', from: '', to: '' });
+  const [filters, setFilters] = useState(() => {
+    const defaults = { q: '', format: 'all', sort: 'published_at', dir: 'desc', from: '', to: '' };
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem('tubescope:library-filters:v1') || 'null');
+      if (saved && typeof saved === 'object')
+        for (const key of Object.keys(defaults) as (keyof typeof defaults)[]) {
+          if (key in saved && typeof (saved as Record<string, unknown>)[key] === 'string') defaults[key] = (saved as Record<string, string>)[key];
+        }
+    } catch {
+      /* Storage is optional. */
+    }
+    return defaults;
+  });
   const [page, setPage] = useState({ key: '', offset: 0 });
   const id = channel.current?.id || '';
   const client = useQueryClient();
@@ -142,6 +214,8 @@ export function Library() {
     onSuccess: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: ['library', id] }),
+        client.invalidateQueries({ queryKey: ['library-scores', id] }),
+        client.invalidateQueries({ queryKey: ['library-segments', id] }),
         client.invalidateQueries({ queryKey: ['channels'] }),
         client.invalidateQueries({ queryKey: ['quota'] }),
       ]);
@@ -155,8 +229,24 @@ export function Library() {
     queryFn: ({ signal }) => getJson<ChannelVideosResponse>(`/channels/${encodeURIComponent(id)}/videos?${params}`, signal),
     enabled: Boolean(id),
   });
+  const scores = useQuery({
+    queryKey: ['library-scores', id],
+    queryFn: ({ signal }) => getJson<VideoScoresResponse>(`/scores/channel/${id}/videos`, signal),
+    enabled: Boolean(id),
+  });
+  const segments = useQuery({
+    queryKey: ['library-segments', id],
+    queryFn: ({ signal }) => getJson<ChannelSegmentsResponse>(`/channels/${id}/segments`, signal),
+    enabled: Boolean(id),
+  });
   function filter(name: keyof typeof filters, value: string) {
-    setFilters(previous => ({ ...previous, [name]: value }));
+    const next = { ...filters, [name]: value };
+    setFilters(next);
+    try {
+      localStorage.setItem('tubescope:library-filters:v1', JSON.stringify(next));
+    } catch {
+      /* Storage is optional. */
+    }
   }
   return (
     <div className="library-page">
@@ -244,13 +334,15 @@ export function Library() {
           ) : (
             <>
               <p>{format(videos.data.total)} matching videos</p>
+              {scores.isError ? <QueryError error={scores.error} retry={() => void scores.refetch()} /> : null}
+              {segments.isError ? <QueryError error={segments.error} retry={() => void segments.refetch()} /> : null}
               {!videos.data.videos.length ? (
                 <p className="muted">No matching videos. Adjust the filters or sync this channel in Channels.</p>
               ) : (
                 <Table caption="Synced video library">
                   <thead>
                     <tr>
-                      {['Video', 'Published', 'Format', 'Duration', 'Views', 'Likes', 'Comments'].map(label => (
+                      {['Video', 'Published', 'Format', 'Duration', 'Views', 'Likes', 'Comments', 'Score', '× format median', 'Tags'].map(label => (
                         <th scope="col" key={label}>
                           {label}
                         </th>
@@ -272,6 +364,19 @@ export function Library() {
                         <td>{format(video.view_count)}</td>
                         <td>{format(video.like_count)}</td>
                         <td>{format(video.comment_count)}</td>
+                        <td>{scores.isPending ? 'Loading…' : format(scores.data?.[video.id]?.score)}</td>
+                        <td>
+                          {segments.isPending
+                            ? 'Loading…'
+                            : video.is_live
+                              ? '—'
+                              : times(
+                                  segments.data && segments.data[video.is_short ? 'shorts' : 'long'].median
+                                    ? video.view_count / segments.data[video.is_short ? 'shorts' : 'long'].median
+                                    : null
+                                )}
+                        </td>
+                        <td>{video.tags.join(', ') || 'No tags'}</td>
                       </tr>
                     ))}
                   </tbody>
