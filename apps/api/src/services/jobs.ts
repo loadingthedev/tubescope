@@ -171,9 +171,13 @@ let catchUpTimer = null;
 export function startCatchUp() {
   if (catchUpTimer) return;
   const every = Number(getSetting('jobs_catchup_minutes', 10)) * 60_000;
-  catchUpTimer = setInterval(() => catchUpTick().catch(e => console.error('[jobs] catch-up', e.message)), every);
+  catchUpTimer = setInterval(() => {
+    void catchUpTick().catch(e => console.error('[jobs] catch-up', e.message));
+  }, every);
   catchUpTimer.unref?.();
-  setTimeout(() => catchUpTick().catch(() => {}), 120_000).unref?.();
+  setTimeout(() => {
+    void catchUpTick().catch(() => {});
+  }, 120_000).unref?.();
 }
 
 /** Status of every job, for the health check and Settings. */

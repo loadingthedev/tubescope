@@ -75,7 +75,7 @@ export async function ensureJob(channelId: string) {
   const st = state(channelId);
   if (st.jobId) return st.jobId;
   const jobs = JSON.parse(await call(channelId, '/jobs')).jobs || [];
-  let job = jobs.find(j => j.reportTypeId === REPORT_TYPE);
+  const job = jobs.find(j => j.reportTypeId === REPORT_TYPE);
   if (!job) throw new Error('No existing reach report job. This read-only fork cannot create one; import Studio CSV instead.');
   saveState(channelId, { ...st, jobId: job.id, jobCreated: job.createTime || new Date().toISOString() });
   return job.id;
@@ -132,7 +132,7 @@ export async function syncChannel(channelId: string) {
       fresh = [];
     do {
       const q = new URLSearchParams(pageToken ? { pageToken } : {});
-      const page = JSON.parse(await call(channelId, `/jobs/${encodeURIComponent(jobId)}/reports${q.size ? '?' + q : ''}`));
+      const page = JSON.parse(await call(channelId, `/jobs/${encodeURIComponent(jobId)}/reports${q.size ? '?' + q.toString() : ''}`));
       fresh.push(...(page.reports || []).filter(r => !seen.has(r.id)));
       pageToken = page.nextPageToken || null;
     } while (pageToken);

@@ -337,9 +337,9 @@ async function runForVideoInner(
   // The owner's own pending title edit wins: the autopilot never competes with it.
   const ownerTitlePending =
     db.prepare("SELECT COUNT(*) AS n FROM staged_edits WHERE video_id = ? AND field = 'title' AND status = 'staged'").get(video.id).n > 0;
-  let newTitle = gainT >= s.minGain && !ownerTitlePending ? titleWin.title : null;
+  const newTitle = gainT >= s.minGain && !ownerTitlePending ? titleWin.title : null;
   // Suggest a thumbnail only when the current image is saved for comparison.
-  let newThumb = gainI >= s.minGain && curThumb ? usableThumbs[Number(thumbWin.key.slice(1)) - 1].path : null;
+  const newThumb = gainI >= s.minGain && curThumb ? usableThumbs[Number(thumbWin.key.slice(1)) - 1].path : null;
   const candidates = {
     titles: packages.filter(p => p.key.startsWith('t')).map(p => ({ title: p.title, score: results[p.key].score, axes: results[p.key].axes })),
     thumbnails: usableThumbs.map((t, i) => ({

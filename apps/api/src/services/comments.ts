@@ -167,7 +167,9 @@ export function pickWinner(
     count = 1,
   }: { keyword?: string; excludeOwner?: boolean; ownerChannelId?: string; count?: number } = {}
 ) {
-  let pool = threads.filter(t => (!keyword || t.text.toLowerCase().includes(keyword.toLowerCase())) && (!excludeOwner || t.authorChannelId !== ownerChannelId));
+  const pool = threads.filter(
+    t => (!keyword || t.text.toLowerCase().includes(keyword.toLowerCase())) && (!excludeOwner || t.authorChannelId !== ownerChannelId)
+  );
   const unique = new Map();
   for (const t of pool) if (!unique.has(t.authorChannelId || t.author)) unique.set(t.authorChannelId || t.author, t);
   const entries = [...unique.values()];

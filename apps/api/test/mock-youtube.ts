@@ -806,4 +806,4 @@ export function startMock(port = 0) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('mock-youtube.ts'))
-  startMock(Number(process.env.MOCK_PORT || 4999)).then(({ port }: { port?: any }) => console.log('mock youtube on', port));
+  void startMock(Number(process.env.MOCK_PORT || 4999)).then(({ port }: { port?: any }) => console.log('mock youtube on', port));

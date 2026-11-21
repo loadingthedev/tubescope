@@ -6,7 +6,7 @@
 //  - Shorts moment prompts → evenly spaced windows within the allowed length, plus one invalid (too short) one
 // Anything else gets an empty JSON object.
 let input = '';
-process.stdin.on('data', d => (input += d));
+process.stdin.on('data', d => (input += d.toString()));
 process.stdin.on('end', () => {
   if (process.env.FAKE_CLAUDE_DUMP) dump(input);
   if (/Write 4 alternative titles/.test(input)) {
@@ -111,5 +111,5 @@ function out(o) {
   process.stdout.write(JSON.stringify(o));
 }
 function dump(t) {
-  import('node:fs').then(fs => fs.writeFileSync(`${process.env.FAKE_CLAUDE_DUMP}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`, t));
+  void import('node:fs').then(fs => fs.writeFileSync(`${process.env.FAKE_CLAUDE_DUMP}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.txt`, t));
 }

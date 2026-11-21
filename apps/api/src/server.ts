@@ -10,7 +10,7 @@ import { startScheduler } from './jobs/scheduler.ts';
 process.on('unhandledRejection', e => console.error('[unhandled]', (e as Error)?.stack || e));
 // A real crash leaves state unknown: log it and exit so launchd starts a clean process.
 process.on('uncaughtException', e => {
-  console.error('[crash]', (e as Error)?.stack || e);
+  console.error('[crash]', e?.stack || e);
   try {
     db.close(true);
   } catch {

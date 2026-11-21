@@ -507,8 +507,8 @@ export function compile(spec, { id }: { id?: string }) {
   });
   f.push(`[${cur}]trim=0:${TOTAL.toFixed(3)},format=yuv420p[vout]`);
   // Audio bus: voice/sfx mixed; ducked beds compressed against the voice mix.
-  let af = [...aud];
-  let mixIn = voice;
+  const af = [...aud];
+  const mixIn = voice;
   if (voice.length) {
     af.push(voice.map(v => `[${v}]`).join('') + (voice.length > 1 ? `amix=inputs=${voice.length}:normalize=0[voice]` : 'anull[voice]'));
     if (notes.length) {

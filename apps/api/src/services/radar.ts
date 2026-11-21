@@ -786,7 +786,7 @@ export async function calibrate(
       { status: 400 }
     );
   onProgress({ stage: 'deterministic', done: 0, total: labelled.length });
-  const rows = labelled.map(r => ({
+  const rows: { id: string; ts: number; y: number; own: boolean; axes: Record<string, number> }[] = labelled.map(r => ({
     id: r.id,
     ts: r.ts,
     y: r.y,
@@ -795,7 +795,7 @@ export async function calibrate(
       patternFit: patternFitAxis(r.tok, r.format, corpus, { beforeTs: r.ts, isShort: r.is_short })?.value ?? null,
       freshness: freshnessAxis(r.tok, corpus, { atTs: r.ts, selfChannelId: r.channel_id })?.value ?? null,
       titleCraft: analyzeTitle(r.title).score,
-    } as Record<string, number>,
+    },
   }));
   let aiReport: { used: boolean; reason?: string; requested?: number; cached?: number; rated?: number; errors?: unknown[] } = {
     used: false,

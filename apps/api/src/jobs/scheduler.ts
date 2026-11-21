@@ -144,7 +144,10 @@ export function startAutopilotJobs(tz) {
   jobs.schedule('weekly', getSetting('weekly_summary_cron', '10 8 * * 1'), () => portfolio.weeklySummary(), { tz, label: 'Weekly summary' });
   if (getSetting('ideas_enabled', '1') === '1') jobs.schedule('ideas', ideasExpr, () => runIdeas(), { tz, label: 'Daily ideas' });
   console.log(`[scheduler] reach sync "${reachExpr}", daily ideas "${ideasExpr}" (${tz})`);
-  if (listChannels('owned').length) setTimeout(() => reach.syncAll().catch(() => {}), 60_000).unref?.();
+  if (listChannels('owned').length)
+    setTimeout(() => {
+      void reach.syncAll().catch(() => {});
+    }, 60_000).unref?.();
 }
 export async function runIdeas() {
   if (getSetting('ideas_enabled', '1') !== '1' || !aiAvailable() || !listChannels('owned').length) return [];

@@ -322,7 +322,7 @@ export function channelHealth(channelId: string) {
     if (v.title.length < 20) problems.push('title too short');
     if (problems.length) issues.push({ id: v.id, title: v.title, published_at: v.published_at, view_count: v.view_count, problems });
   }
-  const summary = {};
+  const summary: Record<string, number> = {};
   for (const i of issues) for (const p of i.problems) summary[p] = (summary[p] || 0) + 1;
   return { total: vids.length, withIssues: issues.length, summary, issues: issues.sort((a, b) => b.view_count - a.view_count) };
 }

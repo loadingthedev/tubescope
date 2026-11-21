@@ -670,7 +670,7 @@ test('similar channels + Studio overlay scoring endpoint', async () => {
   assert.ok(!sim.results.some(c => c.id === owned.id), 'excludes itself');
   assert.ok(sim.results[0].hits >= 1 && typeof sim.results[0].sizeFit === 'number' && sim.results[0].score >= sim.results.at(-1).score);
   assert.ok(sim.results.every(c => Array.isArray(c.sampleTitles) && 'tracked' in c));
-  let r = await api('/ext/studio', { method: 'POST', body: { title: '' } });
+  const r = await api('/ext/studio', { method: 'POST', body: { title: '' } });
   assert.equal(r.status, 400);
   const st = await ok('/ext/studio', {
     method: 'POST',

@@ -34,21 +34,24 @@ const runTool = createToolRunner(call);
 const out = msg => process.stdout.write(JSON.stringify(msg) + '\n');
 let pending = 0;
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
-rl.on('line', async line => {
-  if (!line.trim()) return;
-  pending++;
-  try {
-    let req;
+// readline ignores returned promises; pending tracks completion before stdin closes.
+rl.on('line', line => {
+  void (async () => {
+    if (!line.trim()) return;
+    pending++;
     try {
-      req = JSON.parse(line);
-    } catch {
-      return;
+      let req;
+      try {
+        req = JSON.parse(line);
+      } catch {
+        return;
+      }
+      const r = await handleMcpMessage(req, { runTool, base: BASE });
+      if (r) out(r);
+    } finally {
+      pending--;
     }
-    const r = await handleMcpMessage(req, { runTool, base: BASE });
-    if (r) out(r);
-  } finally {
-    pending--;
-  }
+  })();
 });
 process.stdin.on('end', () => {
   const t = setInterval(() => {

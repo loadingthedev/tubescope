@@ -9,3 +9,21 @@ ignorePatterns = ["**/node_modules/", "apps/web/dist/", "apps/api/public/", "ext
 [lint]
 typeAware = true
 ignorePatterns = ["**/node_modules/", "apps/web/dist/", "apps/api/public/", "extension/"]
+
+[[lint.overrides]]
+files = ["apps/api/**"]
+
+[lint.overrides.rules]
+# The API's loose SQLite/JSON row types make these five rules repeat boundary noise.
+"@typescript-eslint/no-unsafe-argument" = "off"
+"@typescript-eslint/no-unsafe-assignment" = "off"
+"@typescript-eslint/no-unsafe-call" = "off"
+"@typescript-eslint/no-unsafe-member-access" = "off"
+"@typescript-eslint/no-unsafe-return" = "off"
+
+[[lint.overrides]]
+files = ["apps/api/test/**/*.test.ts"]
+
+[lint.overrides.rules]
+# The test runner owns and awaits node:test registration promises.
+"@typescript-eslint/no-floating-promises" = "off"
