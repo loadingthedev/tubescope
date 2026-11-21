@@ -1,3 +1,4 @@
+import { Portfolio } from './portfolio';
 import { Boards } from './boards';
 import { Comments } from './comments';
 import { Packaging } from './packaging';
@@ -31,6 +32,7 @@ const navigation = [
       { to: '/analytics', label: 'Analytics', glyph: '▥' },
       { to: '/packaging', label: 'Packaging', glyph: '▧' },
       { to: '/comments', label: 'Comments', glyph: '☷' },
+      { to: '/portfolio', label: 'All channels', glyph: '◉' },
     ],
   },
   {
@@ -139,6 +141,7 @@ export function App() {
             <Route path="/packaging" element={<Packaging />} />
             <Route path="/comments" element={<Comments />} />
             <Route path="/boards" element={<Boards />} />
+            <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/keywords" element={<Keywords />} />
             <Route path="/outliers" element={<Outliers />} />
             <Route path="/competitors" element={<Competitors />} />
