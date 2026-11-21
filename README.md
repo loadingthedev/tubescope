@@ -11,9 +11,9 @@ It runs on your own machine. Public channel research uses the YouTube Data API. 
 - `packages/shared/`: API response types only; no runtime build.
 - `tsconfig.base.json`: shared compiler options. The new web and shared workspaces use strict checking; the existing API keeps its loose first-pass types.
 
-## Run with Bun
+## Commands
 
-Requires Bun 1.4.0 or later.
+Development checks require **Bun 1.4.6-canary** until 1.4.6 stable ships. The runtime and Docker use Bun 1.4.5; `packageManager` stays `bun@1.4.5`.
 
 ```sh
 bun install
@@ -26,8 +26,13 @@ bun run dev
 bun run build      # build apps/web/dist (API needs no build)
 bun start          # run API; React preview is at http://localhost:4949/app/
 bun run test       # backend tests across workspaces
-bun run typecheck  # check every workspace
+bun run typecheck  # bun check in every workspace
 bun run snapshot   # run the API snapshot job
+bun run format     # format owned source files
+bun run format:check
+bun run lint       # recommended + type-aware rules; warnings are informational
+bun run lint:fix   # safe automatic fixes only
+bun run check      # format check, lint, types, tests; stop at the first error
 ```
 
 The React preview currently implements Keywords: autocomplete, demand index (not search volume), long-tail ideas, and optional competition evidence. Dashboard, Outliers, and Competitors link back to the classic UI until they reach parity. Competition uses the existing search API and quota; it runs only when requested.
@@ -35,6 +40,14 @@ The React preview currently implements Keywords: autocomplete, demand index (not
 Build once before using `/app` through the API. Docker builds the preview automatically. Run a single workspace with `bun run --filter @tubescope/api dev` or `bun run --filter @tubescope/web dev`.
 
 Optional local production helpers need ffmpeg or whisper.cpp. AI is disabled by default; enable the Claude Code CLI or an Anthropic API key in Settings if needed.
+
+### Pre-commit hook
+
+`bun install` runs the root `prepare` script, which installs `scripts/pre-commit` as a symlink at `.git/hooks/pre-commit`. Run `bun run prepare` to reinstall it after moving the checkout. Git worktrees use the hooks directory reported by `git rev-parse --git-path hooks`.
+
+The hook runs `bun lint --no-script --staged --fix`, then `bun fmt --no-script --staged`. Bun preserves partial staging by refusing to rewrite a file with both staged and unstaged edits. The full `bun run check` runs the complete checks.
+
+The formatter uses single quotes, semicolons, and a 160-column width. Both tools exclude `apps/api/public/`, `extension/`, and generated output. TypeScript remains installed for editor support; the scripts use Bun's built-in checker.
 
 ## Run with Docker
 
