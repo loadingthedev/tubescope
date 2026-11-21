@@ -1,4 +1,4 @@
-FROM oven/bun:1.4-slim AS build
+FROM oven/bun:1.4.5-slim AS build
 WORKDIR /app
 COPY package.json bun.lock tsconfig.base.json ./
 COPY apps/api/package.json ./apps/api/package.json
@@ -9,7 +9,7 @@ COPY apps/web ./apps/web
 COPY packages/shared ./packages/shared
 RUN bun run build
 
-FROM oven/bun:1.4-slim AS runtime
+FROM oven/bun:1.4.5-slim AS runtime
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY apps/api/package.json ./apps/api/package.json

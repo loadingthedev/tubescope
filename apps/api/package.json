@@ -12,14 +12,14 @@
     "dev": "bun --watch src/server.ts",
     "test": "bun test --isolate --timeout 180000 < /dev/null",
     "snapshot": "bun src/jobs/run-snapshot.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check --no-script"
   },
   "dependencies": {
     "express": "^4.21.2",
     "node-cron": "^3.0.3",
     "@tubescope/shared": "workspace:*"
   },
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.5",
   "devDependencies": {
     "@types/bun": "^1.4.5",
     "typescript": "^7.0.2"

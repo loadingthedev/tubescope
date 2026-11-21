@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+bun lint --no-script --staged --fix
+bun fmt --no-script --staged

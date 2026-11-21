@@ -8,5 +8,6 @@
     "skipLibCheck": true,
     "strict": false,
     "noImplicitAny": false
-  }
+  },
+  "include": []
 }
