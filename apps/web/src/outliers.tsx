@@ -2,8 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ChannelsResponse, LocalOutlierVideo, OutlierSearchResponse, SettingsResponse } from '@tubescope/shared';
 import { getJson } from './api';
-import { ChannelSelect, PageHeader, QueryError, StatCard, Tabs, useOwnedChannel } from './components/Research';
-import { VideoTable } from './components/VideoTable';
+import { ChannelSelect, PageHeader, QueryError, StatCard, Tabs, useOwnedChannel } from './components/research';
+import { VideoTable } from './components/video-table';
 
 function field(data: FormData, name: string) {
   const value = data.get(name);

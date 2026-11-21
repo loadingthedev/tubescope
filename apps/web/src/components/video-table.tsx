@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Video } from '@tubescope/shared';
-import { Table } from './Research';
+import { Table } from './research';
 import { ageDays, format, times } from './format';
 
 export type ResultVideo = Video & {

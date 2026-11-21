@@ -3,8 +3,8 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CompetitorComparisonResponse, CompetitorMetrics, CompetitorAlert, FeedVideo } from '@tubescope/shared';
 import { getJson, mutateJson } from './api';
-import { ChannelSelect, PageHeader, QueryError, StatCard, Table, Tabs, useOwnedChannel } from './components/Research';
-import { VideoTable } from './components/VideoTable';
+import { ChannelSelect, PageHeader, QueryError, StatCard, Table, Tabs, useOwnedChannel } from './components/research';
+import { VideoTable } from './components/video-table';
 
 const tabs = ['Comparison', 'Upload feed', 'Alerts'];
 const metrics: { key: keyof CompetitorMetrics; label: string; percent?: boolean }[] = [

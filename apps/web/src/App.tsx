@@ -3,8 +3,8 @@ import { NavLink, Route, Routes } from 'react-router';
 import type { QuotaResponse } from '@tubescope/shared';
 import { getJson } from './api';
 import { Keywords } from './Keywords';
-import { Outliers } from './Outliers';
-import { Competitors } from './Competitors';
+import { Outliers } from './outliers';
+import { Competitors } from './competitors';
 
 const classicUrl = import.meta.env.DEV ? 'http://localhost:4949/' : '/';
 const navigation = [

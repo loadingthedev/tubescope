@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KeywordCompetitionResponse, KeywordDemandResponse, KeywordExploreResponse, SettingsResponse } from '@tubescope/shared';
 import { getJson } from './api';
 
-import { PageHeader, StatCard, Table, QueryError } from './components/Research';
+import { PageHeader, StatCard, Table, QueryError } from './components/research';
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
 function Suggestions({ title, items }: { title: string; items: string[] }) {
