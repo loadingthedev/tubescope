@@ -1,6 +1,8 @@
 # Tubescope (Oddstory fork)
 
-Private MIT fork, taken at upstream commit 3503111. See README.md for upstream credits. It is our YouTube research desk: keywords, outliers, competitors, analytics. It replaces vidIQ.
+Public MIT fork, taken at upstream commit 3503111. See README.md for upstream credits. It is our YouTube research desk: keywords, outliers, competitors, analytics. It replaces vidIQ.
+
+The repo is public. Never commit keys, tokens, data, or our channel skills and playbooks: those stay in the private channel repos.
 
 ## Rules
 
